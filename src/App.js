@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, AlertTriangle, Plus, Edit3, Clock, Award } from 'lucide-react';
 import './App.css';
 
@@ -56,35 +56,43 @@ const AnalystOS = () => {
     }
   }, []);
 
-  // Save data to localStorage whenever state changes
+  // Save data to localStorage with debounce to prevent excessive re-renders
   useEffect(() => {
-    const dataToSave = {
-      companies,
-      pipelineIdeas,
-      memos,
-      streak,
-      weeklyWins,
-      lastSaved: new Date().toISOString()
-    };
-    localStorage.setItem('analystOSData', JSON.stringify(dataToSave));
+    const timeoutId = setTimeout(() => {
+      const dataToSave = {
+        companies,
+        pipelineIdeas,
+        memos,
+        streak,
+        weeklyWins,
+        lastSaved: new Date().toISOString()
+      };
+      localStorage.setItem('analystOSData', JSON.stringify(dataToSave));
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
   }, [companies, pipelineIdeas, memos, streak, weeklyWins]);
 
-  // Update pipeline days in pipeline automatically
+  // Update pipeline days in pipeline automatically (less frequent updates)
   useEffect(() => {
     const interval = setInterval(() => {
       setPipelineIdeas(prevIdeas => 
-        prevIdeas.map(idea => ({
-          ...idea,
-          daysInPipeline: Math.floor((new Date() - new Date(idea.dateAdded)) / (1000 * 60 * 60 * 24))
-        }))
+        prevIdeas.map(idea => {
+          const daysSinceAdded = Math.floor((new Date() - new Date(idea.dateAdded)) / (1000 * 60 * 60 * 24));
+          // Only update if the days actually changed to prevent unnecessary re-renders
+          if (daysSinceAdded !== idea.daysInPipeline) {
+            return { ...idea, daysInPipeline: daysSinceAdded };
+          }
+          return idea;
+        })
       );
-    }, 60000); // Update every minute
+    }, 300000); // Update every 5 minutes instead of every minute
 
     return () => clearInterval(interval);
-  }, []);
+  }, []); // Empty dependency array
 
-  // Functions to add new items
-  const addPipelineIdea = () => {
+  // Functions to add new items (memoized to prevent re-renders)
+  const addPipelineIdea = useCallback(() => {
     if (newIdeaCompany.trim()) {
       const newIdea = {
         id: Math.max(...pipelineIdeas.map(p => p.id), 0) + 1,
@@ -93,13 +101,13 @@ const AnalystOS = () => {
         status: 'Pipeline',
         daysInPipeline: 0
       };
-      setPipelineIdeas([...pipelineIdeas, newIdea]);
+      setPipelineIdeas(prev => [...prev, newIdea]);
       setNewIdeaCompany('');
       setShowAddIdeaModal(false);
     }
-  };
+  }, [newIdeaCompany, pipelineIdeas]);
 
-  const addMemo = () => {
+  const addMemo = useCallback(() => {
     if (newMemoTitle.trim()) {
       const newMemo = {
         id: Math.max(...memos.map(m => m.id), 0) + 1,
@@ -109,13 +117,13 @@ const AnalystOS = () => {
         priority: newMemoPriority,
         daysWorking: 0
       };
-      setMemos([...memos, newMemo]);
+      setMemos(prev => [...prev, newMemo]);
       setNewMemoTitle('');
       setShowAddMemoModal(false);
     }
-  };
+  }, [newMemoTitle, newMemoType, newMemoPriority, memos]);
 
-  const movePipelineToActive = (ideaId) => {
+  const movePipelineToActive = useCallback((ideaId) => {
     const idea = pipelineIdeas.find(p => p.id === ideaId);
     if (idea) {
       // Add to companies as Active
@@ -128,18 +136,18 @@ const AnalystOS = () => {
         status: 'Active',
         sector: 'TBD'
       };
-      setCompanies([...companies, newCompany]);
+      setCompanies(prev => [...prev, newCompany]);
       
       // Remove from pipeline
-      setPipelineIdeas(pipelineIdeas.filter(p => p.id !== ideaId));
+      setPipelineIdeas(prev => prev.filter(p => p.id !== ideaId));
     }
-  };
+  }, [pipelineIdeas, companies]);
 
-  const archivePipelineIdea = (ideaId) => {
-    setPipelineIdeas(pipelineIdeas.filter(p => p.id !== ideaId));
-  };
+  const archivePipelineIdea = useCallback((ideaId) => {
+    setPipelineIdeas(prev => prev.filter(p => p.id !== ideaId));
+  }, []);
 
-  const completeDailyCheckin = () => {
+  const completeDailyCheckin = useCallback(() => {
     if (dailyGoals.trim()) {
       localStorage.setItem('dailyGoals', JSON.stringify({
         goals: dailyGoals,
@@ -147,14 +155,14 @@ const AnalystOS = () => {
       }));
       alert('Daily goals set! Stay focused and crush your deliverables.');
     }
-  };
+  }, [dailyGoals]);
 
-  const completeDailyCheckout = () => {
+  const completeDailyCheckout = useCallback(() => {
     if (checkoutReflection.trim()) {
       // Update streak based on discipline rating
       if (disciplineRating >= 3) {
-        setStreak(streak + 1);
-        setWeeklyWins(weeklyWins + 1);
+        setStreak(prev => prev + 1);
+        setWeeklyWins(prev => prev + 1);
       } else {
         setStreak(0); // Reset streak if poor performance
       }
@@ -176,7 +184,7 @@ const AnalystOS = () => {
       
       alert(`Day completed! ${disciplineRating >= 3 ? 'Streak continues!' : 'Focus better tomorrow.'}`);
     }
-  };
+  }, [checkoutReflection, disciplineRating]);
 
   const getDaysAgo = (dateString) => {
     if (dateString === 'Never') return Infinity;
