@@ -186,6 +186,36 @@ const AnalystOS = () => {
     }
   }, [checkoutReflection, disciplineRating]);
 
+  // Memoized onChange handlers to prevent re-renders
+  const handleDailyGoalsChange = useCallback((e) => {
+    setDailyGoals(e.target.value);
+  }, []);
+
+  const handleCheckoutReflectionChange = useCallback((e) => {
+    setCheckoutReflection(e.target.value);
+  }, []);
+
+  const handleDisciplineRatingChange = useCallback((rating) => {
+    setDisciplineRating(rating);
+  }, []);
+
+  // Modal input handlers
+  const handleNewIdeaCompanyChange = useCallback((e) => {
+    setNewIdeaCompany(e.target.value);
+  }, []);
+
+  const handleNewMemoTitleChange = useCallback((e) => {
+    setNewMemoTitle(e.target.value);
+  }, []);
+
+  const handleNewMemoTypeChange = useCallback((e) => {
+    setNewMemoType(e.target.value);
+  }, []);
+
+  const handleNewMemoPriorityChange = useCallback((e) => {
+    setNewMemoPriority(e.target.value);
+  }, []);
+
   const getDaysAgo = (dateString) => {
     if (dateString === 'Never') return Infinity;
     const date = new Date(dateString);
@@ -477,7 +507,7 @@ const AnalystOS = () => {
                 <input
                   type="text"
                   value={newIdeaCompany}
-                  onChange={(e) => setNewIdeaCompany(e.target.value)}
+                  onChange={handleNewIdeaCompanyChange}
                   className="w-full p-3 border rounded-lg"
                   placeholder="e.g., Palantir Technologies"
                   onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
@@ -583,7 +613,7 @@ const AnalystOS = () => {
                 <input
                   type="text"
                   value={newMemoTitle}
-                  onChange={(e) => setNewMemoTitle(e.target.value)}
+                  onChange={handleNewMemoTitleChange}
                   className="w-full p-3 border rounded-lg"
                   placeholder="e.g., TSLA Q2 Earnings Analysis"
                 />
@@ -594,7 +624,7 @@ const AnalystOS = () => {
                 </label>
                 <select
                   value={newMemoType}
-                  onChange={(e) => setNewMemoType(e.target.value)}
+                  onChange={handleNewMemoTypeChange}
                   className="w-full p-3 border rounded-lg"
                 >
                   <option value="Memo">Memo</option>
@@ -608,7 +638,7 @@ const AnalystOS = () => {
                 </label>
                 <select
                   value={newMemoPriority}
-                  onChange={(e) => setNewMemoPriority(e.target.value)}
+                  onChange={handleNewMemoPriorityChange}
                   className="w-full p-3 border rounded-lg"
                 >
                   <option value="Low">Low</option>
@@ -655,7 +685,7 @@ const AnalystOS = () => {
               </label>
               <textarea
                 value={dailyGoals}
-                onChange={(e) => setDailyGoals(e.target.value)}
+                onChange={handleDailyGoalsChange}
                 className="w-full p-3 border rounded-lg resize-none"
                 rows="3"
                 placeholder="e.g., Finish NVDA model update, Send Big Tech memo draft..."
@@ -700,7 +730,7 @@ const AnalystOS = () => {
             </label>
             <textarea
               value={checkoutReflection}
-              onChange={(e) => setCheckoutReflection(e.target.value)}
+              onChange={handleCheckoutReflectionChange}
               className="w-full p-3 border rounded-lg resize-none"
               rows="3"
               placeholder="Reflect on your day's progress..."
@@ -715,7 +745,7 @@ const AnalystOS = () => {
               {[1, 2, 3, 4, 5].map((rating) => (
                 <button
                   key={rating}
-                  onClick={() => setDisciplineRating(rating)}
+                  onClick={() => handleDisciplineRatingChange(rating)}
                   className={`w-12 h-12 rounded-full font-bold transition-colors ${
                     rating <= disciplineRating
                       ? 'bg-blue-500 text-white'
