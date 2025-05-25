@@ -2,144 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, AlertTriangle, Plus, Edit3, Clock, Award } from 'lucide-react';
 import './App.css';
 
-// Move components OUTSIDE to prevent recreation on every render
-const Navigation = ({ currentView, setCurrentView }) => (
-  <nav className="bg-slate-900 text-white p-4">
-    <div className="flex items-center justify-between">
-      <h1 className="text-xl font-bold">Analyst OS</h1>
-      <div className="flex space-x-4">
-        {[
-          { key: 'dashboard', label: 'Dashboard', icon: TrendingUp },
-          { key: 'coverage', label: 'Coverage', icon: Target },
-          { key: 'pipeline', label: 'Pipeline', icon: Clock },
-          { key: 'memos', label: 'Memos/Models', icon: BookOpen },
-          { key: 'discipline', label: 'Discipline', icon: Award }
-        ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setCurrentView(key)}
-            className={`flex items-center space-x-2 px-3 py-2 rounded transition-colors ${
-              currentView === key ? 'bg-slate-700' : 'hover:bg-slate-800'
-            }`}
-          >
-            <Icon size={16} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  </nav>
-);
-
-const DisciplineEngine = ({ 
-  dailyGoals, 
-  setDailyGoals, 
-  checkoutReflection, 
-  setCheckoutReflection, 
-  disciplineRating, 
-  setDisciplineRating, 
-  streak, 
-  weeklyWins,
-  completeDailyCheckin,
-  completeDailyCheckout 
-}) => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <CheckCircle className="mr-2" size={20} />
-          Morning Check-in
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              What are your top 1-2 outputs today?
-            </label>
-            <textarea
-              value={dailyGoals}
-              onChange={(e) => setDailyGoals(e.target.value)}
-              className="w-full p-3 border rounded-lg resize-none"
-              rows="3"
-              placeholder="e.g., Finish NVDA model update, Send Big Tech memo draft..."
-            />
-          </div>
-          <button 
-            onClick={completeDailyCheckin}
-            className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors">
-            Set Daily Goals
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <Award className="mr-2" size={20} />
-          Performance Stats
-        </h3>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span>Current Streak</span>
-            <span className="text-2xl font-bold text-green-600">{streak}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span>Weekly Wins</span>
-            <span className="text-2xl font-bold text-blue-600">{weeklyWins}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span>Avg. Discipline Rating</span>
-            <span className="text-2xl font-bold text-purple-600">4.2/5</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div className="bg-white p-6 rounded-lg shadow-sm border">
-      <h3 className="text-lg font-semibold mb-4">End-of-Day Check-out</h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Did you hit your goals? What did you accomplish?
-          </label>
-          <textarea
-            value={checkoutReflection}
-            onChange={(e) => setCheckoutReflection(e.target.value)}
-            className="w-full p-3 border rounded-lg resize-none"
-            rows="3"
-            placeholder="Reflect on your day's progress..."
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Discipline Rating (1-5)
-          </label>
-          <div className="flex space-x-2">
-            {[1, 2, 3, 4, 5].map((rating) => (
-              <button
-                key={rating}
-                onClick={() => setDisciplineRating(rating)}
-                className={`w-12 h-12 rounded-full font-bold transition-colors ${
-                  rating <= disciplineRating
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                }`}
-              >
-                {rating}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button 
-          onClick={completeDailyCheckout}
-          className="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 transition-colors font-medium">
-          Complete Daily Check-out
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
 const AnalystOS = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const [dailyGoals, setDailyGoals] = useState('');
@@ -183,18 +45,18 @@ const AnalystOS = () => {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
-        setCompanies(parsed.companies || companies);
-        setPipelineIdeas(parsed.pipelineIdeas || pipelineIdeas);
-        setMemos(parsed.memos || memos);
-        setStreak(parsed.streak || streak);
-        setWeeklyWins(parsed.weeklyWins || weeklyWins);
+        if (parsed.companies) setCompanies(parsed.companies);
+        if (parsed.pipelineIdeas) setPipelineIdeas(parsed.pipelineIdeas);
+        if (parsed.memos) setMemos(parsed.memos);
+        if (parsed.streak) setStreak(parsed.streak);
+        if (parsed.weeklyWins) setWeeklyWins(parsed.weeklyWins);
       } catch (error) {
         console.error('Error loading saved data:', error);
       }
     }
   }, []);
 
-  // Save data to localStorage with debounce to prevent excessive re-renders
+  // Save data to localStorage with debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       const dataToSave = {
@@ -206,82 +68,29 @@ const AnalystOS = () => {
         lastSaved: new Date().toISOString()
       };
       localStorage.setItem('analystOSData', JSON.stringify(dataToSave));
-    }, 500); // 500ms debounce
+    }, 1000); // 1 second debounce
 
     return () => clearTimeout(timeoutId);
   }, [companies, pipelineIdeas, memos, streak, weeklyWins]);
 
-  // Update pipeline days in pipeline automatically (less frequent updates)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPipelineIdeas(prevIdeas => 
-        prevIdeas.map(idea => {
-          const daysSinceAdded = Math.floor((new Date() - new Date(idea.dateAdded)) / (1000 * 60 * 60 * 24));
-          // Only update if the days actually changed to prevent unnecessary re-renders
-          if (daysSinceAdded !== idea.daysInPipeline) {
-            return { ...idea, daysInPipeline: daysSinceAdded };
-          }
-          return idea;
-        })
-      );
-    }, 300000); // Update every 5 minutes instead of every minute
-
-    return () => clearInterval(interval);
-  }, []); // Empty dependency array
-
-  // Load data from localStorage on component mount
-  useEffect(() => {
-    const savedData = localStorage.getItem('analystOSData');
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        setCompanies(parsed.companies || companies);
-        setPipelineIdeas(parsed.pipelineIdeas || pipelineIdeas);
-        setMemos(parsed.memos || memos);
-        setStreak(parsed.streak || streak);
-        setWeeklyWins(parsed.weeklyWins || weeklyWins);
-      } catch (error) {
-        console.error('Error loading saved data:', error);
-      }
-    }
+  // Memoized onChange handlers - THE KEY FIX
+  const handleDailyGoalsChange = useCallback((e) => {
+    setDailyGoals(e.target.value);
   }, []);
 
-  // Save data to localStorage with debounce to prevent excessive re-renders
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const dataToSave = {
-        companies,
-        pipelineIdeas,
-        memos,
-        streak,
-        weeklyWins,
-        lastSaved: new Date().toISOString()
-      };
-      localStorage.setItem('analystOSData', JSON.stringify(dataToSave));
-    }, 500); // 500ms debounce
+  const handleCheckoutReflectionChange = useCallback((e) => {
+    setCheckoutReflection(e.target.value);
+  }, []);
 
-    return () => clearTimeout(timeoutId);
-  }, [companies, pipelineIdeas, memos, streak, weeklyWins]);
+  const handleNewIdeaCompanyChange = useCallback((e) => {
+    setNewIdeaCompany(e.target.value);
+  }, []);
 
-  // Update pipeline days in pipeline automatically (less frequent updates)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPipelineIdeas(prevIdeas => 
-        prevIdeas.map(idea => {
-          const daysSinceAdded = Math.floor((new Date() - new Date(idea.dateAdded)) / (1000 * 60 * 60 * 24));
-          // Only update if the days actually changed to prevent unnecessary re-renders
-          if (daysSinceAdded !== idea.daysInPipeline) {
-            return { ...idea, daysInPipeline: daysSinceAdded };
-          }
-          return idea;
-        })
-      );
-    }, 300000); // Update every 5 minutes instead of every minute
+  const handleNewMemoTitleChange = useCallback((e) => {
+    setNewMemoTitle(e.target.value);
+  }, []);
 
-    return () => clearInterval(interval);
-  }, []); // Empty dependency array
-
-  // Functions to add new items (simplified)
+  // Other functions
   const addPipelineIdea = useCallback(() => {
     if (newIdeaCompany.trim()) {
       const newIdea = {
@@ -372,7 +181,45 @@ const AnalystOS = () => {
     }
   };
 
-  // Simple Dashboard component inline (doesn't need inputs)
+  const getStageColor = (stage) => {
+    switch(stage) {
+      case 'Started': return 'bg-blue-100 text-blue-800';
+      case 'In Draft': return 'bg-yellow-100 text-yellow-800';
+      case 'Sent': return 'bg-green-100 text-green-800';
+      case 'Stalled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Components defined inside but using memoized handlers
+  const Navigation = () => (
+    <nav className="bg-slate-900 text-white p-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Analyst OS</h1>
+        <div className="flex space-x-4">
+          {[
+            { key: 'dashboard', label: 'Dashboard', icon: TrendingUp },
+            { key: 'coverage', label: 'Coverage', icon: Target },
+            { key: 'pipeline', label: 'Pipeline', icon: Clock },
+            { key: 'memos', label: 'Memos/Models', icon: BookOpen },
+            { key: 'discipline', label: 'Discipline', icon: Award }
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setCurrentView(key)}
+              className={`flex items-center space-x-2 px-3 py-2 rounded transition-colors ${
+                currentView === key ? 'bg-slate-700' : 'hover:bg-slate-800'
+              }`}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </nav>
+  );
+
   const Dashboard = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -477,57 +324,428 @@ const AnalystOS = () => {
     </div>
   );
 
-  // Simple render function for current view
+  const PipelineManager = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-semibold">Pipeline Ideas</h2>
+            <p className="text-gray-600">Track new investment ideas and their progression</p>
+          </div>
+          <button 
+            onClick={() => setShowAddIdeaModal(true)}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
+            <Plus size={16} className="mr-2" />
+            Add Idea
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          {pipelineIdeas.map((idea) => (
+            <div key={idea.id} className="border rounded-lg p-4">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg">{idea.company}</h3>
+                  <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                    <span>Added: {idea.dateAdded}</span>
+                    <span className={`font-medium ${idea.daysInPipeline > 30 ? 'text-red-600' : 'text-gray-600'}`}>
+                      {idea.daysInPipeline} days in pipeline
+                    </span>
+                    {idea.daysInPipeline > 30 && (
+                      <span className="flex items-center text-red-600">
+                        <AlertTriangle size={16} className="mr-1" />
+                        Red Flag
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => movePipelineToActive(idea.id)}
+                    className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
+                    Move to Active
+                  </button>
+                  <button className="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600">
+                    Follow-Up
+                  </button>
+                  <button 
+                    onClick={() => archivePipelineIdea(idea.id)}
+                    className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
+                    Archive
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add Idea Modal */}
+      {showAddIdeaModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4">Add New Pipeline Idea</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  value={newIdeaCompany}
+                  onChange={handleNewIdeaCompanyChange}
+                  className="w-full p-3 border rounded-lg"
+                  placeholder="e.g., Palantir Technologies"
+                  onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
+                />
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={addPipelineIdea}
+                  className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
+                >
+                  Add to Pipeline
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddIdeaModal(false);
+                    setNewIdeaCompany('');
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const DisciplineEngine = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <CheckCircle className="mr-2" size={20} />
+            Morning Check-in
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                What are your top 1-2 outputs today?
+              </label>
+              <textarea
+                value={dailyGoals}
+                onChange={handleDailyGoalsChange}
+                className="w-full p-3 border rounded-lg resize-none"
+                rows="3"
+                placeholder="e.g., Finish NVDA model update, Send Big Tech memo draft..."
+              />
+            </div>
+            <button 
+              onClick={completeDailyCheckin}
+              className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors">
+              Set Daily Goals
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <Award className="mr-2" size={20} />
+            Performance Stats
+          </h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span>Current Streak</span>
+              <span className="text-2xl font-bold text-green-600">{streak}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Weekly Wins</span>
+              <span className="text-2xl font-bold text-blue-600">{weeklyWins}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Avg. Discipline Rating</span>
+              <span className="text-2xl font-bold text-purple-600">4.2/5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h3 className="text-lg font-semibold mb-4">End-of-Day Check-out</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Did you hit your goals? What did you accomplish?
+            </label>
+            <textarea
+              value={checkoutReflection}
+              onChange={handleCheckoutReflectionChange}
+              className="w-full p-3 border rounded-lg resize-none"
+              rows="3"
+              placeholder="Reflect on your day's progress..."
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Discipline Rating (1-5)
+            </label>
+            <div className="flex space-x-2">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  onClick={() => setDisciplineRating(rating)}
+                  className={`w-12 h-12 rounded-full font-bold transition-colors ${
+                    rating <= disciplineRating
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                  }`}
+                >
+                  {rating}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button 
+            onClick={completeDailyCheckout}
+            className="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 transition-colors font-medium">
+            Complete Daily Check-out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const CoverageTracker = () => (
+    <div className="bg-white rounded-lg shadow-sm border">
+      <div className="p-6 border-b">
+        <h2 className="text-xl font-semibold">Coverage Universe</h2>
+        <p className="text-gray-600">Track model updates and memo status across your coverage</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Model</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Memo</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Update</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {companies.map((company) => (
+              <tr key={company.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{company.name}</div>
+                    <div className="text-sm text-gray-500">{company.ticker}</div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(company.status)}`}>
+                    {company.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <div>{company.lastModel}</div>
+                  <div className="text-gray-500">
+                    {company.lastModel === 'Never' ? 'Never updated' : `${getDaysAgo(company.lastModel)} days ago`}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <div>{company.lastMemo}</div>
+                  <div className="text-gray-500">
+                    {company.lastMemo === 'Never' ? 'Never written' : `${getDaysAgo(company.lastMemo)} days ago`}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {getDaysAgo(company.lastModel) > 30 ? (
+                    <span className="text-red-600 font-medium">Overdue</span>
+                  ) : (
+                    <span className="text-green-600">On Track</span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <button className="text-blue-600 hover:text-blue-900 mr-3">Update</button>
+                  <button className="text-green-600 hover:text-green-900">Memo</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const MemoModelTracker = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-semibold">Memos & Models</h2>
+            <p className="text-gray-600">Track your research deliverables and their progress</p>
+          </div>
+          <button 
+            onClick={() => setShowAddMemoModal(true)}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
+            <Plus size={16} className="mr-2" />
+            New Deliverable
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {memos.map((memo) => (
+            <div key={memo.id} className="border rounded-lg p-4">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3">
+                    <h3 className="font-semibold text-lg">{memo.title}</h3>
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                      {memo.type}
+                    </span>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStageColor(memo.stage)}`}>
+                      {memo.stage}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                    <span>Priority: {memo.priority}</span>
+                    <span>Working for {memo.daysWorking} days</span>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 flex items-center">
+                    <Edit3 size={14} className="mr-1" />
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const updatedMemos = memos.map(m => {
+                        if (m.id === memo.id) {
+                          const stages = ['Started', 'In Draft', 'Sent', 'Stalled'];
+                          const currentIndex = stages.indexOf(m.stage);
+                          const nextStage = currentIndex < 2 ? stages[currentIndex + 1] : m.stage;
+                          return { ...m, stage: nextStage };
+                        }
+                        return m;
+                      });
+                      setMemos(updatedMemos);
+                    }}
+                    className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
+                    Advance Stage
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add Memo Modal */}
+      {showAddMemoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4">Add New Deliverable</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={newMemoTitle}
+                  onChange={handleNewMemoTitleChange}
+                  className="w-full p-3 border rounded-lg"
+                  placeholder="e.g., TSLA Q2 Earnings Analysis"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Type
+                </label>
+                <select
+                  value={newMemoType}
+                  onChange={(e) => setNewMemoType(e.target.value)}
+                  className="w-full p-3 border rounded-lg"
+                >
+                  <option value="Memo">Memo</option>
+                  <option value="Model">Model</option>
+                  <option value="Report">Report</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Priority
+                </label>
+                <select
+                  value={newMemoPriority}
+                  onChange={(e) => setNewMemoPriority(e.target.value)}
+                  className="w-full p-3 border rounded-lg"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    if (newMemoTitle.trim()) {
+                      const newMemo = {
+                        id: Math.max(...memos.map(m => m.id), 0) + 1,
+                        title: newMemoTitle.trim(),
+                        type: newMemoType,
+                        stage: 'Started',
+                        priority: newMemoPriority,
+                        daysWorking: 0
+                      };
+                      setMemos(prev => [...prev, newMemo]);
+                      setNewMemoTitle('');
+                      setShowAddMemoModal(false);
+                    }
+                  }}
+                  className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
+                >
+                  Create Deliverable
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddMemoModal(false);
+                    setNewMemoTitle('');
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render current view
   const renderCurrentView = () => {
     switch(currentView) {
-      case 'dashboard': 
-        return <Dashboard />;
-      case 'pipeline': 
-        return (
-          <PipelineManager 
-            pipelineIdeas={pipelineIdeas}
-            showAddIdeaModal={showAddIdeaModal}
-            setShowAddIdeaModal={setShowAddIdeaModal}
-            newIdeaCompany={newIdeaCompany}
-            setNewIdeaCompany={setNewIdeaCompany}
-            addPipelineIdea={addPipelineIdea}
-            movePipelineToActive={movePipelineToActive}
-            archivePipelineIdea={archivePipelineIdea}
-          />
-        );
-      case 'discipline': 
-        return (
-          <DisciplineEngine 
-            dailyGoals={dailyGoals}
-            setDailyGoals={setDailyGoals}
-            checkoutReflection={checkoutReflection}
-            setCheckoutReflection={setCheckoutReflection}
-            disciplineRating={disciplineRating}
-            setDisciplineRating={setDisciplineRating}
-            streak={streak}
-            weeklyWins={weeklyWins}
-            completeDailyCheckin={completeDailyCheckin}
-            completeDailyCheckout={completeDailyCheckout}
-          />
-        );
-      default: 
-        return <Dashboard />;
+      case 'dashboard': return <Dashboard />;
+      case 'coverage': return <CoverageTracker />;
+      case 'pipeline': return <PipelineManager />;
+      case 'memos': return <MemoModelTracker />;
+      case 'discipline': return <DisciplineEngine />;
+      default: return <Dashboard />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation currentView={currentView} setCurrentView={setCurrentView} />
-      <main className="container mx-auto px-4 py-8">
-        {renderCurrentView()}
-      </main>
-    </div>
-  );
-};
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentView={currentView} setCurrentView={setCurrentView} />
+      <Navigation />
       <main className="container mx-auto px-4 py-8">
         {renderCurrentView()}
       </main>
