@@ -281,6 +281,10 @@ const AnalystOS = () => {
     setDisciplineRating(rating);
   };
 
+  const handlePassReasonChange = (e) => {
+    setPassReason(e.target.value);
+  };
+
   // Other functions
   const addPipelineIdea = () => {
     if (newIdeaCompany.trim()) {
@@ -566,7 +570,7 @@ const AnalystOS = () => {
             onInitiatePass={initiatePass}
             showPassModal={showPassModal}
             passReason={passReason}
-            onPassReasonChange={(e) => setPassReason(e.target.value)}
+            onPassReasonChange={handlePassReasonChange}
             onConfirmPass={confirmPass}
             onCancelPass={cancelPass}
           />
