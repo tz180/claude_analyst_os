@@ -13,104 +13,164 @@ const DisciplineEngine = ({
   streak, 
   weeklyWins, 
   onDailyCheckin, 
-  onDailyCheckout 
-}) => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  onDailyCheckout,
+  checkoutHistory 
+}) => {
+  // Calculate average rating from recent history
+  const recentHistory = checkoutHistory.slice(-7); // Last 7 days
+  const avgRating = recentHistory.length > 0 
+    ? (recentHistory.reduce((sum, item) => sum + item.rating, 0) / recentHistory.length).toFixed(1)
+    : '0.0';
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <CheckCircle className="mr-2" size={20} />
+            Morning Check-in
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                What are your top 1-2 outputs today?
+              </label>
+              <textarea
+                value={dailyGoals}
+                onChange={onDailyGoalsChange}
+                className="w-full p-3 border rounded-lg resize-none"
+                rows="3"
+                placeholder="e.g., Finish NVDA model update, Send Big Tech memo draft..."
+              />
+            </div>
+            <button 
+              onClick={onDailyCheckin}
+              className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors">
+              Set Daily Goals
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <Award className="mr-2" size={20} />
+            Performance Stats
+          </h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span>Current Streak</span>
+              <span className="text-2xl font-bold text-green-600">{streak}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Weekly Wins</span>
+              <span className="text-2xl font-bold text-blue-600">{weeklyWins}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Avg. Discipline Rating (7d)</span>
+              <span className="text-2xl font-bold text-purple-600">{avgRating}/5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <CheckCircle className="mr-2" size={20} />
-          Morning Check-in
-        </h3>
+        <h3 className="text-lg font-semibold mb-4">End-of-Day Check-out</h3>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              What are your top 1-2 outputs today?
+              Did you hit your goals? What did you accomplish?
             </label>
             <textarea
-              value={dailyGoals}
-              onChange={onDailyGoalsChange}
+              value={checkoutReflection}
+              onChange={onCheckoutReflectionChange}
               className="w-full p-3 border rounded-lg resize-none"
               rows="3"
-              placeholder="e.g., Finish NVDA model update, Send Big Tech memo draft..."
+              placeholder="Reflect on your day's progress..."
             />
           </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Discipline Rating (1-5)
+            </label>
+            <div className="flex space-x-2">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  onClick={() => onDisciplineRatingChange(rating)}
+                  className={`w-12 h-12 rounded-full font-bold transition-colors ${
+                    rating <= disciplineRating
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                  }`}
+                >
+                  {rating}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button 
-            onClick={onDailyCheckin}
-            className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors">
-            Set Daily Goals
+            onClick={onDailyCheckout}
+            className="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 transition-colors font-medium">
+            Complete Daily Check-out
           </button>
         </div>
       </div>
 
+      {/* Checkout History */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <Award className="mr-2" size={20} />
-          Performance Stats
-        </h3>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span>Current Streak</span>
-            <span className="text-2xl font-bold text-green-600">{streak}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span>Weekly Wins</span>
-            <span className="text-2xl font-bold text-blue-600">{weeklyWins}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span>Avg. Discipline Rating</span>
-            <span className="text-2xl font-bold text-purple-600">4.2/5</span>
-          </div>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Recent Check-out History</h3>
+          {checkoutHistory.length > 1 && (
+            <div className="text-sm text-gray-600">
+              {(() => {
+                const recent = checkoutHistory.slice(-3);
+                const older = checkoutHistory.slice(-6, -3);
+                const recentAvg = recent.reduce((sum, item) => sum + item.rating, 0) / recent.length;
+                const olderAvg = older.length > 0 ? older.reduce((sum, item) => sum + item.rating, 0) / older.length : recentAvg;
+                const trend = recentAvg > olderAvg ? '📈 Improving' : recentAvg < olderAvg ? '📉 Declining' : '➡️ Stable';
+                return <span className="font-medium">{trend}</span>;
+              })()}
+            </div>
+          )}
         </div>
-      </div>
-    </div>
-
-    <div className="bg-white p-6 rounded-lg shadow-sm border">
-      <h3 className="text-lg font-semibold mb-4">End-of-Day Check-out</h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Did you hit your goals? What did you accomplish?
-          </label>
-          <textarea
-            value={checkoutReflection}
-            onChange={onCheckoutReflectionChange}
-            className="w-full p-3 border rounded-lg resize-none"
-            rows="3"
-            placeholder="Reflect on your day's progress..."
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Discipline Rating (1-5)
-          </label>
-          <div className="flex space-x-2">
-            {[1, 2, 3, 4, 5].map((rating) => (
-              <button
-                key={rating}
-                onClick={() => onDisciplineRatingChange(rating)}
-                className={`w-12 h-12 rounded-full font-bold transition-colors ${
-                  rating <= disciplineRating
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                }`}
-              >
-                {rating}
-              </button>
+        {checkoutHistory.length > 0 ? (
+          <div className="space-y-4">
+            {checkoutHistory.slice(-10).reverse().map((entry, index) => (
+              <div key={index} className="border-l-4 border-blue-500 pl-4 py-3 bg-gray-50 rounded">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-medium text-gray-900">{entry.date}</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">Rating:</span>
+                    <span className={`px-2 py-1 rounded text-sm font-medium ${
+                      entry.rating >= 4 ? 'bg-green-100 text-green-800' :
+                      entry.rating >= 3 ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {entry.rating}/5
+                    </span>
+                  </div>
+                </div>
+                <p className="text-gray-700 text-sm leading-relaxed">{entry.reflection}</p>
+              </div>
             ))}
+            {checkoutHistory.length > 10 && (
+              <div className="text-center pt-4">
+                <span className="text-sm text-gray-500">Showing 10 most recent entries</span>
+              </div>
+            )}
           </div>
-        </div>
-
-        <button 
-          onClick={onDailyCheckout}
-          className="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 transition-colors font-medium">
-          Complete Daily Check-out
-        </button>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <p>No check-out history yet.</p>
+            <p className="text-sm mt-1">Complete your first daily check-out to start tracking your progress!</p>
+          </div>
+        )}
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const PipelineManager = ({ 
   pipelineIdeas, 
@@ -260,6 +320,7 @@ const AnalystOS = () => {
   const [newMemoPriority, setNewMemoPriority] = useState('Medium');
   const [passingIdeaId, setPassingIdeaId] = useState(null);
   const [passReason, setPassReason] = useState('Not a Fit');
+  const [historyRefresh, setHistoryRefresh] = useState(0);
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -394,6 +455,52 @@ const AnalystOS = () => {
   const cancelAddMemo = () => {
     setShowAddMemoModal(false);
     setNewMemoTitle('');
+  };
+
+  // Get checkout history from localStorage
+  const getCheckoutHistory = () => {
+    try {
+      const history = localStorage.getItem('checkoutHistory');
+      const existing = history ? JSON.parse(history) : [];
+      
+      // Add sample data if no history exists
+      if (existing.length === 0) {
+        const sampleHistory = [
+          {
+            reflection: "Great day! Completed NVDA earnings model and sent first draft to team. Stayed focused throughout the day.",
+            rating: 5,
+            date: "2025-05-20"
+          },
+          {
+            reflection: "Solid progress on portfolio analysis. Got distracted by market news in afternoon but recovered well.",
+            rating: 4,
+            date: "2025-05-21"
+          },
+          {
+            reflection: "Struggled with focus today. Too many meetings interrupted deep work. Need better time blocking.",
+            rating: 2,
+            date: "2025-05-22"
+          },
+          {
+            reflection: "Much better! Implemented time blocking strategy. Finished memo review and started new pipeline research.",
+            rating: 4,
+            date: "2025-05-23"
+          },
+          {
+            reflection: "Excellent execution. Hit all major goals and even got ahead on tomorrow's prep work. Feeling very productive.",
+            rating: 5,
+            date: "2025-05-24"
+          }
+        ];
+        localStorage.setItem('checkoutHistory', JSON.stringify(sampleHistory));
+        return sampleHistory;
+      }
+      
+      return existing;
+    } catch (error) {
+      console.error('Error loading checkout history:', error);
+      return [];
+    }
   };
 
   const completeDailyCheckin = () => {
@@ -816,6 +923,8 @@ const AnalystOS = () => {
             weeklyWins={weeklyWins}
             onDailyCheckin={completeDailyCheckin}
             onDailyCheckout={completeDailyCheckout}
+            checkoutHistory={getCheckoutHistory()}
+            key={historyRefresh}
           />
         );
       case 'coverage':
