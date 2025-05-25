@@ -397,6 +397,7 @@ const AnalystOS = () => {
                   className="w-full p-3 border rounded-lg"
                   placeholder="e.g., Palantir Technologies"
                   onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
+                  autoFocus
                 />
               </div>
               <div className="flex space-x-3">
@@ -663,6 +664,7 @@ const AnalystOS = () => {
                   onChange={handleNewMemoTitleChange}
                   className="w-full p-3 border rounded-lg"
                   placeholder="e.g., TSLA Q2 Earnings Analysis"
+                  autoFocus
                 />
               </div>
               <div>
