@@ -555,25 +555,227 @@ const AnalystOS = () => {
         return <Dashboard />;
       case 'pipeline': 
         return (
-          <PipelineManager 
-            pipelineIdeas={pipelineIdeas}
-            showAddIdeaModal={showAddIdeaModal}
-            onShowAddIdeaModal={setShowAddIdeaModal}
-            newIdeaCompany={newIdeaCompany}
-            onNewIdeaCompanyChange={handleNewIdeaCompanyChange}
-            onAddPipelineIdea={addPipelineIdea}
-            onMovePipelineToActive={movePipelineToActive}
-            onArchivePipelineIdea={archivePipelineIdea}
-            onCancelAddIdea={cancelAddIdea}
-            onMoveToCore={moveToCore}
-            onMoveToOnDeck={moveToOnDeck}
-            onInitiatePass={initiatePass}
-            showPassModal={showPassModal}
-            passReason={passReason}
-            onPassReasonChange={handlePassReasonChange}
-            onConfirmPass={confirmPass}
-            onCancelPass={cancelPass}
-          />
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-semibold">Investment Pipeline</h2>
+                  <p className="text-gray-600">Track ideas through On Deck → Core → Active Coverage</p>
+                </div>
+                <button 
+                  onClick={() => setShowAddIdeaModal(true)}
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
+                  <Plus size={16} className="mr-2" />
+                  Add New Idea
+                </button>
+              </div>
+            </div>
+
+            {/* Pipeline Stages */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* On Deck Column */}
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="p-4 border-b bg-blue-50">
+                  <h3 className="font-semibold text-lg text-blue-900">
+                    On Deck ({pipelineIdeas.filter(idea => idea.status === 'On Deck').length})
+                  </h3>
+                  <p className="text-sm text-blue-700">Initial ideas for evaluation</p>
+                </div>
+                <div className="p-4 space-y-4">
+                  {pipelineIdeas.filter(idea => idea.status === 'On Deck').map((idea) => (
+                    <div key={idea.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-semibold">{idea.company}</h4>
+                          <div className="text-sm text-gray-600 mt-1">
+                            <div>Added: {idea.dateAdded}</div>
+                            <div>{idea.daysInPipeline} days in pipeline</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col space-y-1">
+                          <button 
+                            onClick={() => moveToCore(idea.id)}
+                            className="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600">
+                            → Core
+                          </button>
+                          <button 
+                            onClick={() => initiatePass(idea.id)}
+                            className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">
+                            Pass
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {pipelineIdeas.filter(idea => idea.status === 'On Deck').length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No ideas on deck</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Core Column */}
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="p-4 border-b bg-green-50">
+                  <h3 className="font-semibold text-lg text-green-900">
+                    Core ({pipelineIdeas.filter(idea => idea.status === 'Core').length})
+                  </h3>
+                  <p className="text-sm text-green-700">Active research and analysis</p>
+                </div>
+                <div className="p-4 space-y-4">
+                  {pipelineIdeas.filter(idea => idea.status === 'Core').map((idea) => (
+                    <div key={idea.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-semibold">{idea.company}</h4>
+                          <div className="text-sm text-gray-600 mt-1">
+                            <div>Added: {idea.dateAdded}</div>
+                            <div>{idea.daysInPipeline} days in pipeline</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col space-y-1">
+                          <button 
+                            onClick={() => movePipelineToActive(idea.id)}
+                            className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600">
+                            → Active
+                          </button>
+                          <button 
+                            onClick={() => moveToOnDeck(idea.id)}
+                            className="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600">
+                            ← On Deck
+                          </button>
+                          <button 
+                            onClick={() => initiatePass(idea.id)}
+                            className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">
+                            Pass
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {pipelineIdeas.filter(idea => idea.status === 'Core').length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No core ideas</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Passed Column */}
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="p-4 border-b bg-red-50">
+                  <h3 className="font-semibold text-lg text-red-900">
+                    Passed ({pipelineIdeas.filter(idea => idea.status === 'Passed').length})
+                  </h3>
+                  <p className="text-sm text-red-700">Ideas we decided to pass on</p>
+                </div>
+                <div className="p-4 space-y-4">
+                  {pipelineIdeas.filter(idea => idea.status === 'Passed').map((idea) => (
+                    <div key={idea.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-semibold">{idea.company}</h4>
+                          <div className="text-sm text-gray-600 mt-1">
+                            <div>Added: {idea.dateAdded}</div>
+                            <div className="text-red-600 font-medium">Passed: {idea.passReason}</div>
+                            <div>Pass Date: {idea.passDate}</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col space-y-1">
+                          <button 
+                            onClick={() => archivePipelineIdea(idea.id)}
+                            className="bg-gray-500 text-white px-2 py-1 rounded text-xs hover:bg-gray-600">
+                            Archive
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {pipelineIdeas.filter(idea => idea.status === 'Passed').length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No passed ideas</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Add Idea Modal */}
+            {showAddIdeaModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-96">
+                  <h3 className="text-lg font-semibold mb-4">Add New Pipeline Idea</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Company Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newIdeaCompany}
+                        onChange={handleNewIdeaCompanyChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., Palantir Technologies"
+                        onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={addPipelineIdea}
+                        className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
+                      >
+                        Add to Pipeline
+                      </button>
+                      <button
+                        onClick={cancelAddIdea}
+                        className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pass Modal */}
+            {showPassModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-96">
+                  <h3 className="text-lg font-semibold mb-4">Pass on Idea</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Reason for Passing
+                      </label>
+                      <select
+                        value={passReason}
+                        onChange={handlePassReasonChange}
+                        className="w-full p-3 border rounded-lg"
+                      >
+                        <option value="Management">Management</option>
+                        <option value="Outlook">Outlook</option>
+                        <option value="Not a Fit">Not a Fit</option>
+                        <option value="Valuation">Valuation</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={confirmPass}
+                        className="flex-1 bg-red-500 text-white py-2 rounded hover:bg-red-600 transition-colors"
+                      >
+                        Confirm Pass
+                      </button>
+                      <button
+                        onClick={cancelPass}
+                        className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         );
       case 'discipline': 
         return (
