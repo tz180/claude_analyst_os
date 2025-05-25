@@ -318,6 +318,22 @@ const AnalystOS = () => {
     setNewIdeaCompany('');
   };
 
+  // Quick action handlers for dashboard
+  const handleQuickAddPipelineIdea = () => {
+    setCurrentView('pipeline');
+    setShowAddIdeaModal(true);
+  };
+
+  const handleQuickCreateMemo = () => {
+    setCurrentView('memos');
+    setShowAddMemoModal(true);
+  };
+
+  const cancelAddMemo = () => {
+    setShowAddMemoModal(false);
+    setNewMemoTitle('');
+  };
+
   const completeDailyCheckin = () => {
     if (dailyGoals.trim()) {
       alert('Daily goals set! Stay focused and crush your deliverables.');
@@ -469,12 +485,12 @@ const AnalystOS = () => {
               Start Daily Check-in
             </button>
             <button 
-              onClick={() => setShowAddIdeaModal(true)}
+              onClick={handleQuickAddPipelineIdea}
               className="w-full p-3 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
               Add New Pipeline Idea
             </button>
             <button 
-              onClick={() => setShowAddMemoModal(true)}
+              onClick={handleQuickCreateMemo}
               className="w-full p-3 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
               Create New Memo/Model
             </button>
@@ -713,10 +729,7 @@ const AnalystOS = () => {
                         Create Deliverable
                       </button>
                       <button
-                        onClick={() => {
-                          setShowAddMemoModal(false);
-                          setNewMemoTitle('');
-                        }}
+                        onClick={cancelAddMemo}
                         className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
                       >
                         Cancel
