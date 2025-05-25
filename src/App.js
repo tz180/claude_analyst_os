@@ -233,14 +233,15 @@ const AnalystOS = () => {
     { id: 3, name: 'Nvidia Corp.', ticker: 'NVDA', lastModel: '2025-05-18', lastMemo: '2025-05-16', status: 'Active', sector: 'Tech' },
     { id: 4, name: 'Tesla Inc.', ticker: 'TSLA', lastModel: '2025-04-28', lastMemo: '2025-04-25', status: 'Pipeline', sector: 'Auto' },
     { id: 5, name: 'Meta Platforms', ticker: 'META', lastModel: '2025-05-01', lastMemo: '2025-04-30', status: 'Active', sector: 'Tech' },
+    { id: 6, name: 'Snowflake Inc.', ticker: 'SNOW', lastModel: '2025-05-20', lastMemo: '2025-05-18', status: 'Active', sector: 'Tech' },
   ]);
 
   const [pipelineIdeas, setPipelineIdeas] = useState([
-    { id: 1, company: 'Palantir Technologies', dateAdded: '2025-05-01', status: 'On Deck', daysInPipeline: 21 },
-    { id: 2, company: 'Snowflake Inc.', dateAdded: '2025-05-10', status: 'Core', daysInPipeline: 12 },
-    { id: 3, company: 'CrowdStrike Holdings', dateAdded: '2025-04-15', status: 'Core', daysInPipeline: 37 },
-    { id: 4, company: 'MongoDB Inc.', dateAdded: '2025-04-20', status: 'Passed', daysInPipeline: 32, passReason: 'Valuation', passDate: '2025-05-15' },
-    { id: 5, company: 'Okta Inc.', dateAdded: '2025-04-10', status: 'Passed', daysInPipeline: 42, passReason: 'Management', passDate: '2025-05-10' },
+    { id: 1, company: 'Palantir Technologies', dateAdded: '2025-05-01', status: 'On Deck', daysInPipeline: 21, inCoverage: false },
+    { id: 2, company: 'Snowflake Inc.', dateAdded: '2025-05-10', status: 'Core', daysInPipeline: 12, inCoverage: true },
+    { id: 3, company: 'CrowdStrike Holdings', dateAdded: '2025-04-15', status: 'Core', daysInPipeline: 37, inCoverage: false },
+    { id: 4, company: 'MongoDB Inc.', dateAdded: '2025-04-20', status: 'Passed', daysInPipeline: 32, passReason: 'Valuation', passDate: '2025-05-15', inCoverage: false },
+    { id: 5, company: 'Okta Inc.', dateAdded: '2025-04-10', status: 'Passed', daysInPipeline: 42, passReason: 'Management', passDate: '2025-05-10', inCoverage: false },
   ]);
 
   const [memos, setMemos] = useState([
@@ -293,7 +294,8 @@ const AnalystOS = () => {
         company: newIdeaCompany.trim(),
         dateAdded: new Date().toISOString().split('T')[0],
         status: 'On Deck',
-        daysInPipeline: 0
+        daysInPipeline: 0,
+        inCoverage: false
       };
       setPipelineIdeas(prev => [...prev, newIdea]);
       setNewIdeaCompany('');
@@ -343,17 +345,29 @@ const AnalystOS = () => {
   const movePipelineToActive = (ideaId) => {
     const idea = pipelineIdeas.find(p => p.id === ideaId);
     if (idea && idea.status === 'Core') {
-      const newCompany = {
-        id: Math.max(...companies.map(c => c.id), 0) + 1,
-        name: idea.company,
-        ticker: 'TBD',
-        lastModel: 'Never',
-        lastMemo: 'Never',
-        status: 'Active',
-        sector: 'TBD'
-      };
-      setCompanies(prev => [...prev, newCompany]);
-      setPipelineIdeas(prev => prev.filter(p => p.id !== ideaId));
+      // Check if already in coverage universe
+      const existsInCoverage = companies.some(c => c.name === idea.company);
+      if (!existsInCoverage) {
+        const newCompany = {
+          id: Math.max(...companies.map(c => c.id), 0) + 1,
+          name: idea.company,
+          ticker: 'TBD',
+          lastModel: 'Never',
+          lastMemo: 'Never',
+          status: 'Active',
+          sector: 'TBD'
+        };
+        setCompanies(prev => [...prev, newCompany]);
+        
+        // Mark the pipeline idea as being in coverage
+        setPipelineIdeas(prev => prev.map(p => 
+          p.id === ideaId ? { ...p, inCoverage: true } : p
+        ));
+        
+        alert(`${idea.company} added to Coverage Universe and remains in Core pipeline for continued tracking.`);
+      } else {
+        alert(`${idea.company} is already in Coverage Universe.`);
+      }
     }
   };
 
@@ -588,7 +602,14 @@ const AnalystOS = () => {
                     <div key={idea.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h4 className="font-semibold">{idea.company}</h4>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-semibold">{idea.company}</h4>
+                            {idea.inCoverage && (
+                              <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                                In Coverage
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-600 mt-1">
                             <div>Added: {idea.dateAdded}</div>
                             <div>{idea.daysInPipeline} days in pipeline</div>
@@ -637,8 +658,13 @@ const AnalystOS = () => {
                         <div className="flex flex-col space-y-1">
                           <button 
                             onClick={() => movePipelineToActive(idea.id)}
-                            className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600">
-                            → Active
+                            disabled={idea.inCoverage}
+                            className={`px-2 py-1 rounded text-xs ${
+                              idea.inCoverage 
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'bg-green-500 text-white hover:bg-green-600'
+                            }`}>
+                            {idea.inCoverage ? 'In Coverage' : 'Add to Coverage'}
                           </button>
                           <button 
                             onClick={() => moveToOnDeck(idea.id)}
