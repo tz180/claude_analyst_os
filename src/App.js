@@ -236,9 +236,11 @@ const AnalystOS = () => {
   ]);
 
   const [pipelineIdeas, setPipelineIdeas] = useState([
-    { id: 1, company: 'Palantir Technologies', dateAdded: '2025-05-01', status: 'Pipeline', daysInPipeline: 21 },
-    { id: 2, company: 'Snowflake Inc.', dateAdded: '2025-05-10', status: 'Pipeline', daysInPipeline: 12 },
-    { id: 3, company: 'CrowdStrike Holdings', dateAdded: '2025-04-15', status: 'Pipeline', daysInPipeline: 37 },
+    { id: 1, company: 'Palantir Technologies', dateAdded: '2025-05-01', status: 'On Deck', daysInPipeline: 21 },
+    { id: 2, company: 'Snowflake Inc.', dateAdded: '2025-05-10', status: 'Core', daysInPipeline: 12 },
+    { id: 3, company: 'CrowdStrike Holdings', dateAdded: '2025-04-15', status: 'Core', daysInPipeline: 37 },
+    { id: 4, company: 'MongoDB Inc.', dateAdded: '2025-04-20', status: 'Passed', daysInPipeline: 32, passReason: 'Valuation', passDate: '2025-05-15' },
+    { id: 5, company: 'Okta Inc.', dateAdded: '2025-04-10', status: 'Passed', daysInPipeline: 42, passReason: 'Management', passDate: '2025-05-10' },
   ]);
 
   const [memos, setMemos] = useState([
@@ -250,10 +252,13 @@ const AnalystOS = () => {
   // Modal states
   const [showAddIdeaModal, setShowAddIdeaModal] = useState(false);
   const [showAddMemoModal, setShowAddMemoModal] = useState(false);
+  const [showPassModal, setShowPassModal] = useState(false);
   const [newIdeaCompany, setNewIdeaCompany] = useState('');
   const [newMemoTitle, setNewMemoTitle] = useState('');
   const [newMemoType, setNewMemoType] = useState('Memo');
   const [newMemoPriority, setNewMemoPriority] = useState('Medium');
+  const [passingIdeaId, setPassingIdeaId] = useState(null);
+  const [passReason, setPassReason] = useState('Not a Fit');
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -283,7 +288,7 @@ const AnalystOS = () => {
         id: Math.max(...pipelineIdeas.map(p => p.id), 0) + 1,
         company: newIdeaCompany.trim(),
         dateAdded: new Date().toISOString().split('T')[0],
-        status: 'Pipeline',
+        status: 'On Deck',
         daysInPipeline: 0
       };
       setPipelineIdeas(prev => [...prev, newIdea]);
@@ -292,9 +297,48 @@ const AnalystOS = () => {
     }
   };
 
+  const moveToCore = (ideaId) => {
+    setPipelineIdeas(prev => prev.map(idea => 
+      idea.id === ideaId ? { ...idea, status: 'Core' } : idea
+    ));
+  };
+
+  const moveToOnDeck = (ideaId) => {
+    setPipelineIdeas(prev => prev.map(idea => 
+      idea.id === ideaId ? { ...idea, status: 'On Deck' } : idea
+    ));
+  };
+
+  const initiatePass = (ideaId) => {
+    setPassingIdeaId(ideaId);
+    setShowPassModal(true);
+  };
+
+  const confirmPass = () => {
+    if (passingIdeaId) {
+      setPipelineIdeas(prev => prev.map(idea => 
+        idea.id === passingIdeaId ? { 
+          ...idea, 
+          status: 'Passed',
+          passReason: passReason,
+          passDate: new Date().toISOString().split('T')[0]
+        } : idea
+      ));
+      setShowPassModal(false);
+      setPassingIdeaId(null);
+      setPassReason('Not a Fit');
+    }
+  };
+
+  const cancelPass = () => {
+    setShowPassModal(false);
+    setPassingIdeaId(null);
+    setPassReason('Not a Fit');
+  };
+
   const movePipelineToActive = (ideaId) => {
     const idea = pipelineIdeas.find(p => p.id === ideaId);
-    if (idea) {
+    if (idea && idea.status === 'Core') {
       const newCompany = {
         id: Math.max(...companies.map(c => c.id), 0) + 1,
         name: idea.company,
@@ -517,6 +561,14 @@ const AnalystOS = () => {
             onMovePipelineToActive={movePipelineToActive}
             onArchivePipelineIdea={archivePipelineIdea}
             onCancelAddIdea={cancelAddIdea}
+            onMoveToCore={moveToCore}
+            onMoveToOnDeck={moveToOnDeck}
+            onInitiatePass={initiatePass}
+            showPassModal={showPassModal}
+            passReason={passReason}
+            onPassReasonChange={(e) => setPassReason(e.target.value)}
+            onConfirmPass={confirmPass}
+            onCancelPass={cancelPass}
           />
         );
       case 'discipline': 
