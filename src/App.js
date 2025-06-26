@@ -336,9 +336,14 @@ const AnalystOS = () => {
     { id: 1, name: 'Apple Inc.', ticker: 'AAPL', lastModel: '2025-05-15', lastMemo: '2025-05-10', status: 'Active', sector: 'Tech' },
     { id: 2, name: 'Microsoft Corp.', ticker: 'MSFT', lastModel: '2025-05-12', lastMemo: '2025-05-08', status: 'Active', sector: 'Tech' },
     { id: 3, name: 'Nvidia Corp.', ticker: 'NVDA', lastModel: '2025-05-18', lastMemo: '2025-05-16', status: 'Active', sector: 'Tech' },
-    { id: 4, name: 'Tesla Inc.', ticker: 'TSLA', lastModel: '2025-04-28', lastMemo: '2025-04-25', status: 'Pipeline', sector: 'Auto' },
-    { id: 5, name: 'Meta Platforms', ticker: 'META', lastModel: '2025-05-01', lastMemo: '2025-04-30', status: 'Active', sector: 'Tech' },
+    { id: 4, name: 'Tesla Inc.', ticker: 'TSLA', lastModel: '2024-04-28', lastMemo: '2024-04-25', status: 'Active', sector: 'Auto' },
+    { id: 5, name: 'Meta Platforms', ticker: 'META', lastModel: '2025-05-01', lastMemo: '2024-04-30', status: 'Active', sector: 'Tech' },
     { id: 6, name: 'Snowflake Inc.', ticker: 'SNOW', lastModel: '2025-05-20', lastMemo: '2025-05-18', status: 'Active', sector: 'Tech' },
+  ]);
+
+  const [formerCompanies, setFormerCompanies] = useState([
+    { id: 7, name: 'Twitter Inc.', ticker: 'TWTR', lastModel: '2022-10-15', lastMemo: '2022-10-12', status: 'Former', sector: 'Tech', removedDate: '2022-10-28', removeReason: 'Bad business right now' },
+    { id: 8, name: 'Peloton Interactive', ticker: 'PTON', lastModel: '2023-03-20', lastMemo: '2023-03-18', status: 'Former', sector: 'Consumer', removedDate: '2023-04-15', removeReason: 'Valuation' },
   ]);
 
   const [pipelineIdeas, setPipelineIdeas] = useState([
@@ -355,16 +360,24 @@ const AnalystOS = () => {
     { id: 3, title: 'Big Tech Capex Comparison', type: 'Memo', stage: 'Sent', priority: 'High', daysWorking: 7 },
   ]);
 
+  const [completedMemos, setCompletedMemos] = useState([
+    { id: 4, title: 'AAPL Q1 Earnings Analysis', type: 'Memo', stage: 'Completed', priority: 'High', daysWorking: 5, completedDate: '2025-05-20' },
+    { id: 5, title: 'MSFT Cloud Revenue Model', type: 'Model', stage: 'Completed', priority: 'Medium', daysWorking: 8, completedDate: '2025-05-18' },
+  ]);
+
   // Modal states
   const [showAddIdeaModal, setShowAddIdeaModal] = useState(false);
   const [showAddMemoModal, setShowAddMemoModal] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [newIdeaCompany, setNewIdeaCompany] = useState('');
   const [newMemoTitle, setNewMemoTitle] = useState('');
   const [newMemoType, setNewMemoType] = useState('Memo');
   const [newMemoPriority, setNewMemoPriority] = useState('Medium');
   const [passingIdeaId, setPassingIdeaId] = useState(null);
   const [passReason, setPassReason] = useState('Not a Fit');
+  const [removingCompanyId, setRemovingCompanyId] = useState(null);
+  const [removeReason, setRemoveReason] = useState('Not a fit');
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [goalsRefresh, setGoalsRefresh] = useState(0);
 
@@ -391,6 +404,10 @@ const AnalystOS = () => {
 
   const handlePassReasonChange = (e) => {
     setPassReason(e.target.value);
+  };
+
+  const handleRemoveReasonChange = (e) => {
+    setRemoveReason(e.target.value);
   };
 
   // Other functions
@@ -678,6 +695,7 @@ const AnalystOS = () => {
       case 'Active': return 'bg-green-100 text-green-800';
       case 'Pipeline': return 'bg-yellow-100 text-yellow-800';
       case 'Dropped': return 'bg-red-100 text-red-800';
+      case 'Former': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -1082,65 +1100,184 @@ const AnalystOS = () => {
         );
       case 'coverage':
         return (
-          <div className="bg-white rounded-lg shadow-sm border">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-semibold">Coverage Universe</h2>
-              <p className="text-gray-600">Track model updates and memo status across your coverage</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Model</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Memo</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Update</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {companies.map((company) => (
-                    <tr key={company.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{company.name}</div>
-                          <div className="text-sm text-gray-500">{company.ticker}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(company.status)}`}>
-                          {company.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div>{company.lastModel}</div>
-                        <div className="text-gray-500">
-                          {company.lastModel === 'Never' ? 'Never updated' : `${getDaysAgo(company.lastModel)} days ago`}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div>{company.lastMemo}</div>
-                        <div className="text-gray-500">
-                          {company.lastMemo === 'Never' ? 'Never written' : `${getDaysAgo(company.lastMemo)} days ago`}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getDaysAgo(company.lastModel) > 30 ? (
-                          <span className="text-red-600 font-medium">Overdue</span>
-                        ) : (
-                          <span className="text-green-600">On Track</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button className="text-blue-600 hover:text-blue-900 mr-3">Update</button>
-                        <button className="text-green-600 hover:text-green-900">Memo</button>
-                      </td>
+          <div className="space-y-6">
+            {/* Active Coverage */}
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="p-6 border-b">
+                <h2 className="text-xl font-semibold">Active Coverage</h2>
+                <p className="text-gray-600">Track model updates and memo status across your current coverage</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Model</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Memo</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Update</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {companies.map((company) => (
+                      <tr key={company.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{company.name}</div>
+                            <div className="text-sm text-gray-500">{company.ticker}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(company.status)}`}>
+                            {company.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div>{company.lastModel}</div>
+                          <div className="text-gray-500">
+                            {company.lastModel === 'Never' ? 'Never updated' : `${getDaysAgo(company.lastModel)} days ago`}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div>{company.lastMemo}</div>
+                          <div className="text-gray-500">
+                            {company.lastMemo === 'Never' ? 'Never written' : `${getDaysAgo(company.lastMemo)} days ago`}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {getDaysAgo(company.lastModel) > 30 ? (
+                            <span className="text-red-600 font-medium">Overdue</span>
+                          ) : (
+                            <span className="text-green-600">On Track</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button 
+                            onClick={() => updateLastModel(company.id)}
+                            className="text-blue-600 hover:text-blue-900 mr-3">
+                            Update
+                          </button>
+                          <button 
+                            onClick={() => updateLastMemo(company.id)}
+                            className="text-green-600 hover:text-green-900 mr-3">
+                            Memo
+                          </button>
+                          <button 
+                            onClick={() => initiateRemove(company.id)}
+                            className="text-red-600 hover:text-red-900">
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {/* Former Coverage */}
+            {formerCompanies.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="p-6 border-b">
+                  <h2 className="text-xl font-semibold">Former Coverage</h2>
+                  <p className="text-gray-600">Companies previously in coverage</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Model</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Memo</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Removed Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Removed Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {formerCompanies.map((company) => (
+                        <tr key={company.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{company.name}</div>
+                              <div className="text-sm text-gray-500">{company.ticker}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(company.status)}`}>
+                              {company.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>{company.lastModel}</div>
+                            <div className="text-gray-500">
+                              {company.lastModel === 'Never' ? 'Never updated' : `${getDaysAgo(company.lastModel)} days ago`}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>{company.lastMemo}</div>
+                            <div className="text-gray-500">
+                              {company.lastMemo === 'Never' ? 'Never written' : `${getDaysAgo(company.lastMemo)} days ago`}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>{company.removedDate}</div>
+                            <div className="text-gray-500">
+                              {getDaysAgo(company.removedDate)} days ago
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>{company.removeReason}</div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Remove Modal */}
+            {showRemoveModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-96">
+                  <h3 className="text-lg font-semibold mb-4">Remove from Coverage</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Reason for Removal
+                      </label>
+                      <select
+                        value={removeReason}
+                        onChange={handleRemoveReasonChange}
+                        className="w-full p-3 border rounded-lg"
+                      >
+                        <option value="Bad business right now">Bad business right now</option>
+                        <option value="PM doesn't like it">PM doesn't like it</option>
+                        <option value="Valuation">Valuation</option>
+                        <option value="Market">Market</option>
+                        <option value="Not a fit">Not a fit</option>
+                      </select>
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => moveToFormerCoverage(removingCompanyId)}
+                        className="flex-1 bg-red-500 text-white py-2 rounded hover:bg-red-600 transition-colors"
+                      >
+                        Remove from Coverage
+                      </button>
+                      <button
+                        onClick={cancelRemove}
+                        className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'memos':
@@ -1165,47 +1302,185 @@ const AnalystOS = () => {
                   <div key={memo.id} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 mb-2">
                           <h3 className="font-semibold text-lg">{memo.title}</h3>
                           <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
                             {memo.type}
                           </span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-4 text-sm text-gray-600">
+                          <span>Working for {memo.daysWorking} days</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col space-y-2 w-64">
+                        {/* Priority Toggle */}
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-medium text-gray-600 w-12">Priority:</span>
+                          <div className="flex space-x-1">
+                            {['Low', 'Medium', 'High'].map((priority) => (
+                              <button
+                                key={priority}
+                                onClick={() => {
+                                  const updatedMemos = memos.map(m => 
+                                    m.id === memo.id ? { ...m, priority } : m
+                                  );
+                                  setMemos(updatedMemos);
+                                }}
+                                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                  memo.priority === priority
+                                    ? priority === 'High' ? 'bg-red-100 text-red-800' :
+                                      priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                                      'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                              >
+                                {priority}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Stage Progress Bar */}
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-medium text-gray-600 w-12">Stage:</span>
+                          <div className="flex space-x-1 flex-1">
+                            {['Started', 'In Draft', 'Sent'].map((stage, index) => (
+                              <div
+                                key={stage}
+                                className={`flex-1 h-2 rounded-full ${
+                                  index <= ['Started', 'In Draft', 'Sent'].indexOf(memo.stage)
+                                    ? 'bg-blue-500'
+                                    : 'bg-gray-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
                           <span className={`px-2 py-1 rounded text-xs font-medium ${getStageColor(memo.stage)}`}>
                             {memo.stage}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                          <span>Priority: {memo.priority}</span>
-                          <span>Working for {memo.daysWorking} days</span>
+
+                        {/* Stage Navigation */}
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-medium text-gray-600 w-12">Stage:</span>
+                          <button
+                            onClick={() => {
+                              const stages = ['Started', 'In Draft', 'Sent'];
+                              const currentIndex = stages.indexOf(memo.stage);
+                              const prevStage = currentIndex > 0 ? stages[currentIndex - 1] : memo.stage;
+                              const updatedMemos = memos.map(m => 
+                                m.id === memo.id ? { ...m, stage: prevStage } : m
+                              );
+                              setMemos(updatedMemos);
+                            }}
+                            disabled={memo.stage === 'Started'}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              memo.stage === 'Started'
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-gray-500 text-white hover:bg-gray-600'
+                            }`}
+                          >
+                            ← Prev
+                          </button>
+                          <button
+                            onClick={() => {
+                              const stages = ['Started', 'In Draft', 'Sent'];
+                              const currentIndex = stages.indexOf(memo.stage);
+                              const nextStage = currentIndex < stages.length - 1 ? stages[currentIndex + 1] : memo.stage;
+                              const updatedMemos = memos.map(m => 
+                                m.id === memo.id ? { ...m, stage: nextStage } : m
+                              );
+                              setMemos(updatedMemos);
+                            }}
+                            disabled={memo.stage === 'Sent'}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              memo.stage === 'Sent'
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                            }`}
+                          >
+                            Next →
+                          </button>
                         </div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 flex items-center">
-                          <Edit3 size={14} className="mr-1" />
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const updatedMemos = memos.map(m => {
-                              if (m.id === memo.id) {
-                                const stages = ['Started', 'In Draft', 'Sent', 'Stalled'];
-                                const currentIndex = stages.indexOf(m.stage);
-                                const nextStage = currentIndex < 2 ? stages[currentIndex + 1] : m.stage;
-                                return { ...m, stage: nextStage };
-                              }
-                              return m;
-                            });
-                            setMemos(updatedMemos);
-                          }}
-                          className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
-                          Advance Stage
-                        </button>
+
+                        {/* Complete and Stall Actions */}
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-medium text-gray-600 w-12">Actions:</span>
+                          <button 
+                            onClick={() => {
+                              const today = new Date().toISOString().split('T')[0];
+                              const completedMemo = {
+                                ...memo,
+                                stage: 'Completed',
+                                completedDate: today
+                              };
+                              
+                              // Remove from active memos
+                              setMemos(prev => prev.filter(m => m.id !== memo.id));
+                              
+                              // Add to completed memos
+                              setCompletedMemos(prev => [...prev, completedMemo]);
+                            }}
+                            className="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-green-600">
+                            Complete
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const updatedMemos = memos.map(m => 
+                                m.id === memo.id ? { ...m, stage: 'Stalled' } : m
+                              );
+                              setMemos(updatedMemos);
+                            }}
+                            className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-red-600">
+                            Stall
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+
+            {/* Completed Deliverables */}
+            {completedMemos.length > 0 && (
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold">Completed Deliverables</h2>
+                    <p className="text-gray-600">Recently completed research and analysis</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {completedMemos.map((memo) => (
+                    <div key={memo.id} className="border rounded-lg p-4 bg-green-50 border-green-200">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h3 className="font-semibold text-lg">{memo.title}</h3>
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                              {memo.type}
+                            </span>
+                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                              Completed
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-4 text-sm text-gray-600">
+                            <span>Priority: {memo.priority}</span>
+                            <span>Completed: {memo.completedDate}</span>
+                            <span>Worked for {memo.daysWorking} days</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Add Memo Modal */}
             {showAddMemoModal && (
@@ -1290,6 +1565,64 @@ const AnalystOS = () => {
       default: 
         return <Dashboard />;
     }
+  };
+
+  // Update last model date for a company
+  const updateLastModel = (companyId) => {
+    const today = new Date().toISOString().split('T')[0];
+    setCompanies(prev => prev.map(company => 
+      company.id === companyId 
+        ? { ...company, lastModel: today }
+        : company
+    ));
+  };
+
+  // Update last memo date for a company
+  const updateLastMemo = (companyId) => {
+    const today = new Date().toISOString().split('T')[0];
+    setCompanies(prev => prev.map(company => 
+      company.id === companyId 
+        ? { ...company, lastMemo: today }
+        : company
+    ));
+  };
+
+  // Move company to former coverage
+  const moveToFormerCoverage = (companyId) => {
+    const company = companies.find(c => c.id === companyId);
+    if (company) {
+      const today = new Date().toISOString().split('T')[0];
+      const formerCompany = {
+        ...company,
+        status: 'Former',
+        removedDate: today,
+        removeReason: removeReason
+      };
+      
+      // Remove from active coverage
+      setCompanies(prev => prev.filter(c => c.id !== companyId));
+      
+      // Add to former coverage
+      setFormerCompanies(prev => [...prev, formerCompany]);
+      
+      // Reset modal state
+      setShowRemoveModal(false);
+      setRemovingCompanyId(null);
+      setRemoveReason('Not a fit');
+    }
+  };
+
+  // Initiate removal process
+  const initiateRemove = (companyId) => {
+    setRemovingCompanyId(companyId);
+    setShowRemoveModal(true);
+  };
+
+  // Cancel removal
+  const cancelRemove = () => {
+    setShowRemoveModal(false);
+    setRemovingCompanyId(null);
+    setRemoveReason('Not a fit');
   };
 
   return (
