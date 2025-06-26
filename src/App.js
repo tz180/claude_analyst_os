@@ -14,7 +14,9 @@ const DisciplineEngine = ({
   weeklyWins, 
   onDailyCheckin, 
   onDailyCheckout,
-  checkoutHistory 
+  checkoutHistory,
+  onMarkGoalsCompleted,
+  goalsHistory
 }) => {
   // Calculate average rating from recent history
   const recentHistory = checkoutHistory.slice(-7); // Last 7 days
@@ -167,6 +169,49 @@ const DisciplineEngine = ({
             <p className="text-sm mt-1">Complete your first daily check-out to start tracking your progress!</p>
           </div>
         )}
+      </div>
+
+      {/* Daily Goals History */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h3 className="text-lg font-semibold mb-4">Daily Goals History</h3>
+        <div className="space-y-4">
+          {(() => {
+            return goalsHistory.length > 0 ? (
+              goalsHistory.map((entry, index) => (
+                <div key={index} className={`border rounded-lg p-4 ${entry.completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <span className="font-medium text-gray-900">{entry.date}</span>
+                        {entry.completed && (
+                          <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                            Completed
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-sm leading-relaxed ${entry.completed ? 'text-green-700 line-through' : 'text-gray-700'}`}>
+                        {entry.goals}
+                      </p>
+                    </div>
+                    {!entry.completed && (
+                      <button
+                        onClick={() => onMarkGoalsCompleted(entry.date)}
+                        className="ml-4 bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors flex items-center">
+                        <CheckCircle size={14} className="mr-1" />
+                        Mark Complete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No daily goals history yet.</p>
+                <p className="text-sm mt-1">Set your first daily goals to start tracking!</p>
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );
@@ -321,6 +366,7 @@ const AnalystOS = () => {
   const [passingIdeaId, setPassingIdeaId] = useState(null);
   const [passReason, setPassReason] = useState('Not a Fit');
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [goalsRefresh, setGoalsRefresh] = useState(0);
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -503,14 +549,103 @@ const AnalystOS = () => {
     }
   };
 
+  // Get today's daily goals from localStorage
+  const getTodayGoals = () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const dailyGoals = localStorage.getItem('dailyGoals');
+      const goalsHistory = dailyGoals ? JSON.parse(dailyGoals) : [];
+      
+      // Find today's goals
+      const todayGoals = goalsHistory.find(entry => entry.date === today);
+      return todayGoals ? todayGoals.goals : null;
+    } catch (error) {
+      console.error('Error loading daily goals:', error);
+      return null;
+    }
+  };
+
+  // Get daily goals history from localStorage
+  const getGoalsHistory = () => {
+    try {
+      const dailyGoals = localStorage.getItem('dailyGoals');
+      const goalsHistory = dailyGoals ? JSON.parse(dailyGoals) : [];
+      
+      // Sort by date (newest first) and return last 7 days
+      return goalsHistory
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 7);
+    } catch (error) {
+      console.error('Error loading goals history:', error);
+      return [];
+    }
+  };
+
   const completeDailyCheckin = () => {
     if (dailyGoals.trim()) {
+      // Save daily goals to localStorage
+      const today = new Date().toISOString().split('T')[0];
+      const dailyGoalsData = {
+        date: today,
+        goals: dailyGoals.trim(),
+        completed: false
+      };
+      
+      // Get existing daily goals
+      const existingGoals = localStorage.getItem('dailyGoals');
+      const goalsHistory = existingGoals ? JSON.parse(existingGoals) : [];
+      
+      // Remove any existing goals for today and add the new ones
+      const filteredGoals = goalsHistory.filter(entry => entry.date !== today);
+      const updatedGoals = [...filteredGoals, dailyGoalsData];
+      
+      // Save to localStorage
+      localStorage.setItem('dailyGoals', JSON.stringify(updatedGoals));
+      
+      // Clear the input field
+      setDailyGoals('');
+      
+      // Force dashboard refresh
+      setGoalsRefresh(prev => prev + 1);
+      
       alert('Daily goals set! Stay focused and crush your deliverables.');
+    }
+  };
+
+  // Mark daily goals as completed
+  const markGoalsCompleted = (date) => {
+    try {
+      const dailyGoals = localStorage.getItem('dailyGoals');
+      const goalsHistory = dailyGoals ? JSON.parse(dailyGoals) : [];
+      
+      const updatedGoals = goalsHistory.map(entry => 
+        entry.date === date ? { ...entry, completed: true } : entry
+      );
+      
+      localStorage.setItem('dailyGoals', JSON.stringify(updatedGoals));
+      setGoalsRefresh(prev => prev + 1);
+    } catch (error) {
+      console.error('Error marking goals as completed:', error);
     }
   };
 
   const completeDailyCheckout = () => {
     if (checkoutReflection.trim()) {
+      // Create new check-out entry
+      const newCheckout = {
+        reflection: checkoutReflection.trim(),
+        rating: disciplineRating,
+        date: new Date().toISOString().split('T')[0]
+      };
+      
+      // Get existing history and add new entry
+      const existingHistory = getCheckoutHistory();
+      const updatedHistory = [...existingHistory, newCheckout];
+      
+      // Save to localStorage
+      localStorage.setItem('checkoutHistory', JSON.stringify(updatedHistory));
+      
+      // Update streak and weekly wins
       if (disciplineRating >= 3) {
         setStreak(prev => prev + 1);
         setWeeklyWins(prev => prev + 1);
@@ -518,8 +653,12 @@ const AnalystOS = () => {
         setStreak(0);
       }
       
+      // Clear form
       setCheckoutReflection('');
       setDisciplineRating(5);
+      
+      // Force re-render of history
+      setHistoryRefresh(prev => prev + 1);
       
       alert(`Day completed! ${disciplineRating >= 3 ? 'Streak continues!' : 'Focus better tomorrow.'}`);
     }
@@ -583,97 +722,109 @@ const AnalystOS = () => {
   );
 
   // ✅ Simple Dashboard - no text inputs so can stay internal
-  const Dashboard = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <Calendar className="mr-2" size={20} />
-            Today's Plan
-          </h3>
-          <div className="space-y-3">
-            <div className="bg-blue-50 p-3 rounded">
-              <p className="font-medium text-blue-900">Deep Work: 9-11 AM</p>
-              <p className="text-blue-700 text-sm">NVDA earnings model update</p>
+  const Dashboard = () => {
+    const todayGoals = getTodayGoals();
+    
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <Calendar className="mr-2" size={20} />
+              Today's Plan
+            </h3>
+            <div className="space-y-3">
+              {todayGoals ? (
+                <div className="bg-blue-50 p-3 rounded">
+                  <p className="font-medium text-blue-900">Today's Goals</p>
+                  <p className="text-blue-700 text-sm whitespace-pre-wrap">{todayGoals}</p>
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="font-medium text-gray-900">No goals set yet</p>
+                  <p className="text-gray-700 text-sm">Complete your morning check-in to set today's goals</p>
+                  <button 
+                    onClick={() => setCurrentView('discipline')}
+                    className="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors">
+                    Set Goals Now
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="bg-green-50 p-3 rounded">
-              <p className="font-medium text-green-900">Priority Deliverable</p>
-              <p className="text-green-700 text-sm">Finish Big Tech Capex memo</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <Target className="mr-2" size={20} />
+              Week Goals
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span>Models Updated</span>
+                <span className="font-bold text-green-600">3/4</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Memos Sent</span>
+                <span className="font-bold text-blue-600">2/3</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-500 h-2 rounded-full" style={{width: '75%'}}></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <Award className="mr-2" size={20} />
+              Momentum Tracker
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span>Current Streak</span>
+                <span className="font-bold text-orange-600">{streak} days</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>This Week's Wins</span>
+                <span className="font-bold text-green-600">{weeklyWins}</span>
+              </div>
+              <div className="text-sm text-gray-600">
+                Last shipped: AAPL Q1 analysis (yesterday)
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <Target className="mr-2" size={20} />
-            Week Goals
-          </h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span>Models Updated</span>
-              <span className="font-bold text-green-600">3/4</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span>Memos Sent</span>
-              <span className="font-bold text-blue-600">2/3</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-green-500 h-2 rounded-full" style={{width: '75%'}}></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <Award className="mr-2" size={20} />
-            Momentum Tracker
-          </h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span>Current Streak</span>
-              <span className="font-bold text-orange-600">{streak} days</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span>This Week's Wins</span>
-              <span className="font-bold text-green-600">{weeklyWins}</span>
-            </div>
-            <div className="text-sm text-gray-600">
-              Last shipped: AAPL Q1 analysis (yesterday)
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+            <div className="space-y-2">
+              <button 
+                onClick={() => setCurrentView('discipline')}
+                className="w-full p-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                Start Daily Check-in
+              </button>
+              <button 
+                onClick={handleQuickAddPipelineIdea}
+                className="w-full p-3 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
+                Add New Pipeline Idea
+              </button>
+              <button 
+                onClick={handleQuickCreateMemo}
+                className="w-full p-3 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
+                Create New Memo/Model
+              </button>
             </div>
           </div>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-          <div className="space-y-2">
-            <button 
-              onClick={() => setCurrentView('discipline')}
-              className="w-full p-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-              Start Daily Check-in
-            </button>
-            <button 
-              onClick={handleQuickAddPipelineIdea}
-              className="w-full p-3 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
-              Add New Pipeline Idea
-            </button>
-            <button 
-              onClick={handleQuickCreateMemo}
-              className="w-full p-3 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
-              Create New Memo/Model
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // Render current view with external components for text inputs
   const renderCurrentView = () => {
     switch(currentView) {
       case 'dashboard': 
-        return <Dashboard />;
+        return <Dashboard key={goalsRefresh} />;
       case 'pipeline': 
         return (
           <div className="space-y-6">
@@ -924,6 +1075,8 @@ const AnalystOS = () => {
             onDailyCheckin={completeDailyCheckin}
             onDailyCheckout={completeDailyCheckout}
             checkoutHistory={getCheckoutHistory()}
+            onMarkGoalsCompleted={markGoalsCompleted}
+            goalsHistory={getGoalsHistory()}
             key={historyRefresh}
           />
         );
