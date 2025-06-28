@@ -1,7 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, AlertTriangle, Plus, Edit3, Clock, Award } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, Plus, Clock, Award } from 'lucide-react';
 import './App.css';
-import { migrateDataToSupabase, clearLocalStorage } from './dataMigration';
 import { 
   dailyCheckinServices, 
   coverageServices, 
@@ -224,80 +223,6 @@ const DisciplineEngine = ({
   );
 };
 
-const PipelineManager = ({ 
-  pipelineIdeas, 
-  showAddIdeaModal, 
-  onShowAddIdeaModal, 
-  newIdeaCompany, 
-  onNewIdeaCompanyChange, 
-  newIdeaTicker,
-  onNewIdeaTickerChange,
-  onAddPipelineIdea, 
-  onMovePipelineToActive, 
-  onArchivePipelineIdea,
-  onCancelAddIdea
-}) => (
-  <div className="space-y-6">
-    <div className="bg-white p-6 rounded-lg shadow-sm border">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-xl font-semibold">Pipeline Ideas</h2>
-          <p className="text-gray-600">Track new investment ideas and their progression</p>
-        </div>
-        <button 
-          onClick={() => onShowAddIdeaModal(true)}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
-          <Plus size={16} className="mr-2" />
-          Add Idea
-        </button>
-      </div>
-      
-      <div className="space-y-4">
-        {pipelineIdeas.map((idea) => (
-          <div key={idea.id} className="border rounded-lg p-4">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <div className="flex items-center space-x-2">
-                  <h4 className="font-semibold">{idea.company}</h4>
-                  {idea.ticker && (
-                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
-                      {idea.ticker}
-                    </span>
-                  )}
-                  {idea.inCoverage && (
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
-                      In Coverage
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  <div>Added: {idea.dateAdded}</div>
-                  <div>{idea.daysInPipeline} days in pipeline</div>
-                </div>
-              </div>
-              <div className="flex space-x-2">
-                <button 
-                  onClick={() => onMovePipelineToActive(idea.id)}
-                  className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
-                  Move to Active
-                </button>
-                <button className="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600">
-                  Follow-Up
-                </button>
-                <button 
-                  onClick={() => onArchivePipelineIdea(idea.id)}
-                  className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
-                  Archive
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
 const AnalystOS = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const [dailyGoals, setDailyGoals] = useState('');
@@ -307,7 +232,7 @@ const AnalystOS = () => {
   const [weeklyWins, setWeeklyWins] = useState(3);
 
   // Data states - will be loaded from Supabase
-  const [companies, setCompanies] = useState([]);
+  const [coverage, setCoverage] = useState([]);
   const [formerCompanies, setFormerCompanies] = useState([]);
   const [pipelineIdeas, setPipelineIdeas] = useState([]);
   const [memos, setMemos] = useState([]);
@@ -325,7 +250,7 @@ const AnalystOS = () => {
       // Load coverage data
       const activeCoverage = await coverageServices.getActiveCoverage();
       const formerCoverage = await coverageServices.getFormerCoverage();
-      setCompanies(activeCoverage);
+      setCoverage(activeCoverage);
       setFormerCompanies(formerCoverage);
 
       // Load pipeline ideas
@@ -371,6 +296,13 @@ const AnalystOS = () => {
   const [removeReason, setRemoveReason] = useState('Not a fit');
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [goalsRefresh, setGoalsRefresh] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [coverageSearch, setCoverageSearch] = useState('');
+  const [coverageFilter, setCoverageFilter] = useState('all'); // all, active, former
+  const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
+  const [newCompanyTicker, setNewCompanyTicker] = useState('');
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanySector, setNewCompanySector] = useState('');
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -472,7 +404,7 @@ const AnalystOS = () => {
     const idea = pipelineIdeas.find(p => p.id === ideaId);
     if (idea && idea.status === 'Core') {
       // Check if already in coverage universe
-      const existsInCoverage = companies.some(c => c.company === idea.company);
+      const existsInCoverage = coverage.some(c => c.company === idea.company);
       if (!existsInCoverage) {
         const result = await coverageServices.addCompany({
           company: idea.company,
@@ -762,16 +694,33 @@ const AnalystOS = () => {
               </button>
               <button 
                 onClick={async () => {
-                  const result = await migrateDataToSupabase();
-                  if (result.success) {
-                    alert('Data migrated to Supabase successfully!');
-                    clearLocalStorage();
-                  } else {
-                    alert('Migration failed: ' + result.error);
+                  try {
+                    const data = {
+                      dailyCheckins: await dailyCheckinServices.getCheckoutHistory(),
+                      coverage: await coverageServices.getActiveCoverage(),
+                      formerCoverage: await coverageServices.getFormerCoverage(),
+                      deliverables: await deliverablesServices.getDeliverables(),
+                      pipelineIdeas: await pipelineServices.getPipelineIdeas(),
+                      exportDate: new Date().toISOString()
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `analyst-os-backup-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    addNotification('Data exported successfully!', 'success');
+                  } catch (error) {
+                    addNotification('Export failed: ' + error.message, 'error');
                   }
                 }}
-                className="w-full p-3 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors">
-                Migrate to Supabase
+                className="w-full p-3 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
+                Export Data
               </button>
             </div>
           </div>
@@ -1075,139 +1024,183 @@ const AnalystOS = () => {
       case 'coverage':
         return (
           <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Coverage Universe</h2>
+                  <p className="text-gray-600">Manage your active and former coverage</p>
+                </div>
+                <button 
+                  onClick={() => setShowAddCompanyModal(true)}
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
+                  <Plus size={16} className="mr-2" />
+                  Add Company
+                </button>
+              </div>
+              
+              {/* Search and Filter */}
+              <div className="flex space-x-4">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search companies..."
+                    value={coverageSearch}
+                    onChange={(e) => setCoverageSearch(e.target.value)}
+                    className="w-full p-2 border rounded-lg"
+                  />
+                </div>
+                <select
+                  value={coverageFilter}
+                  onChange={(e) => setCoverageFilter(e.target.value)}
+                  className="p-2 border rounded-lg"
+                >
+                  <option value="all">All Companies</option>
+                  <option value="active">Active Coverage</option>
+                  <option value="former">Former Coverage</option>
+                </select>
+              </div>
+            </div>
+
             {/* Active Coverage */}
             <div className="bg-white rounded-lg shadow-sm border">
-              <div className="p-6 border-b">
-                <h2 className="text-xl font-semibold">Active Coverage</h2>
-                <p className="text-gray-600">Track model updates and memo status across your current coverage</p>
+              <div className="p-4 border-b bg-green-50">
+                <h3 className="font-semibold text-lg text-green-900">
+                  Active Coverage ({(() => {
+                    const filtered = coverage.filter(company => {
+                      const matchesSearch = !coverageSearch || 
+                        company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                        company.ticker.toLowerCase().includes(coverageSearch.toLowerCase());
+                      const matchesFilter = coverageFilter === 'all' || coverageFilter === 'active';
+                      return matchesSearch && matchesFilter;
+                    });
+                    return filtered.length;
+                  })()})
+                </h3>
+                <p className="text-sm text-green-700">Companies currently in your coverage universe</p>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Model</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Memo</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Update</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {companies.map((company) => (
-                      <tr key={company.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{company.name}</div>
-                            <div className="text-sm text-gray-500">{company.ticker}</div>
+              <div className="p-4 space-y-4">
+                {(() => {
+                  const filtered = coverage.filter(company => {
+                    const matchesSearch = !coverageSearch || 
+                      company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                      company.ticker.toLowerCase().includes(coverageSearch.toLowerCase());
+                    const matchesFilter = coverageFilter === 'all' || coverageFilter === 'active';
+                    return matchesSearch && matchesFilter;
+                  });
+                  
+                  return filtered.length > 0 ? (
+                    filtered.map((company) => (
+                      <div key={company.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <h4 className="font-semibold">{company.company}</h4>
+                              {company.ticker && (
+                                <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                                  {company.ticker}
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                              <div>
+                                <span className="font-medium">Last Model:</span> {company.lastModelDate || 'Never'}
+                                {company.lastModelDate && (
+                                  <span className="text-gray-500 ml-1">({getDaysAgo(company.lastModelDate)} days ago)</span>
+                                )}
+                              </div>
+                              <div>
+                                <span className="font-medium">Last Memo:</span> {company.lastMemoDate || 'Never'}
+                                {company.lastMemoDate && (
+                                  <span className="text-gray-500 ml-1">({getDaysAgo(company.lastMemoDate)} days ago)</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(company.status)}`}>
-                            {company.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div>{company.lastModel}</div>
-                          <div className="text-gray-500">
-                            {company.lastModel === 'Never' ? 'Never updated' : `${getDaysAgo(company.lastModel)} days ago`}
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={() => updateLastModel(company.id)}
+                              className="bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600">
+                              Update
+                            </button>
+                            <button 
+                              onClick={() => updateLastMemo(company.id)}
+                              className="bg-green-500 text-white px-3 py-1 rounded text-xs hover:bg-green-600">
+                              Memo
+                            </button>
+                            <button 
+                              onClick={() => initiateRemove(company.id)}
+                              className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600">
+                              Remove
+                            </button>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div>{company.lastMemo}</div>
-                          <div className="text-gray-500">
-                            {company.lastMemo === 'Never' ? 'Never written' : `${getDaysAgo(company.lastMemo)} days ago`}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getDaysAgo(company.lastModel) > 30 ? (
-                            <span className="text-red-600 font-medium">Overdue</span>
-                          ) : (
-                            <span className="text-green-600">On Track</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button 
-                            onClick={() => updateLastModel(company.id)}
-                            className="text-blue-600 hover:text-blue-900 mr-3">
-                            Update
-                          </button>
-                          <button 
-                            onClick={() => updateLastMemo(company.id)}
-                            className="text-green-600 hover:text-green-900 mr-3">
-                            Memo
-                          </button>
-                          <button 
-                            onClick={() => initiateRemove(company.id)}
-                            className="text-red-600 hover:text-red-900">
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-8">No companies match the search criteria</p>
+                  );
+                })()}
               </div>
             </div>
 
             {/* Former Coverage */}
             {formerCompanies.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border">
-                <div className="p-6 border-b">
-                  <h2 className="text-xl font-semibold">Former Coverage</h2>
-                  <p className="text-gray-600">Companies previously in coverage</p>
+                <div className="p-4 border-b bg-red-50">
+                  <h3 className="font-semibold text-lg text-red-900">
+                    Former Coverage ({(() => {
+                      const filtered = formerCompanies.filter(company => {
+                        const matchesSearch = !coverageSearch || 
+                          company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                          company.ticker.toLowerCase().includes(coverageSearch.toLowerCase());
+                        const matchesFilter = coverageFilter === 'all' || coverageFilter === 'former';
+                        return matchesSearch && matchesFilter;
+                      });
+                      return filtered.length;
+                    })()})
+                  </h3>
+                  <p className="text-sm text-red-700">Companies removed from coverage with reasons</p>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Model</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Memo</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Removed Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Removed Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {formerCompanies.map((company) => (
-                        <tr key={company.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{company.name}</div>
-                              <div className="text-sm text-gray-500">{company.ticker}</div>
+                <div className="p-4 space-y-4">
+                  {(() => {
+                    const filtered = formerCompanies.filter(company => {
+                      const matchesSearch = !coverageSearch || 
+                        company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                        company.ticker.toLowerCase().includes(coverageSearch.toLowerCase());
+                      const matchesFilter = coverageFilter === 'all' || coverageFilter === 'former';
+                      return matchesSearch && matchesFilter;
+                    });
+                    
+                    return filtered.length > 0 ? (
+                      filtered.map((company) => (
+                        <div key={company.id} className="border rounded-lg p-4 bg-red-50 border-red-200">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <h4 className="font-semibold">{company.company}</h4>
+                                {company.ticker && (
+                                  <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                                    {company.ticker}
+                                  </span>
+                                )}
+                                <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">
+                                  {company.removalReason}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                <div>Removed: {company.removalDate}</div>
+                                <div>Last Model: {company.lastModelDate || 'Never'}</div>
+                                <div>Last Memo: {company.lastMemoDate || 'Never'}</div>
+                              </div>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(company.status)}`}>
-                              {company.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div>{company.lastModel}</div>
-                            <div className="text-gray-500">
-                              {company.lastModel === 'Never' ? 'Never updated' : `${getDaysAgo(company.lastModel)} days ago`}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div>{company.lastMemo}</div>
-                            <div className="text-gray-500">
-                              {company.lastMemo === 'Never' ? 'Never written' : `${getDaysAgo(company.lastMemo)} days ago`}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div>{company.removedDate}</div>
-                            <div className="text-gray-500">
-                              {getDaysAgo(company.removedDate)} days ago
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div>{company.removeReason}</div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">No former companies match the search criteria</p>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -1572,9 +1565,49 @@ const AnalystOS = () => {
     setRemoveReason('Not a fit');
   };
 
+  // Add notification function
+  const addNotification = (message, type = 'info') => {
+    const id = Date.now();
+    const notification = { id, message, type, timestamp: new Date() };
+    setNotifications(prev => [...prev, notification]);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
+      
+      {/* Notifications */}
+      {notifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {notifications.map((notification) => (
+            <div
+              key={notification.id}
+              className={`p-4 rounded-lg shadow-lg max-w-sm ${
+                notification.type === 'success' ? 'bg-green-500 text-white' :
+                notification.type === 'error' ? 'bg-red-500 text-white' :
+                notification.type === 'warning' ? 'bg-yellow-500 text-white' :
+                'bg-blue-500 text-white'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <p className="text-sm font-medium">{notification.message}</p>
+                <button
+                  onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
+                  className="ml-2 text-white hover:text-gray-200"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
       <main className="container mx-auto px-4 py-8">
         {renderCurrentView()}
       </main>
