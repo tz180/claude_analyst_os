@@ -629,9 +629,9 @@ const AnalystOS = () => {
                   Pipeline
                 </button>
                 <button
-                  onClick={() => setCurrentView('checkin')}
+                  onClick={() => setCurrentView('discipline')}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    currentView === 'checkin'
+                    currentView === 'discipline'
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}

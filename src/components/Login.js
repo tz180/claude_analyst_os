@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 
 const Login = ({ onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
@@ -8,6 +8,7 @@ const Login = ({ onSwitchToSignup }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isSignup, setIsSignup] = useState(false);
   
   const { signIn, signUp } = useAuth();
@@ -16,14 +17,23 @@ const Login = ({ onSwitchToSignup }) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
 
     try {
-      const { error } = isSignup 
-        ? await signUp(email, password)
-        : await signIn(email, password);
-
-      if (error) {
-        setError(error.message);
+      if (isSignup) {
+        const { data, error } = await signUp(email, password);
+        if (error) {
+          setError(error.message);
+        } else {
+          // Show success message for signup
+          setSuccess('Account created successfully! Please check your email to confirm your account before signing in.');
+          setIsSignup(false); // Switch back to login mode
+        }
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          setError(error.message);
+        }
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -49,6 +59,13 @@ const Login = ({ onSwitchToSignup }) => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
               <AlertCircle className="text-red-500" size={20} />
               <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center space-x-3">
+              <CheckCircle className="text-green-500" size={20} />
+              <p className="text-green-700 text-sm">{success}</p>
             </div>
           )}
 
@@ -119,7 +136,11 @@ const Login = ({ onSwitchToSignup }) => {
 
         <div className="mt-6 text-center">
           <button
-            onClick={() => setIsSignup(!isSignup)}
+            onClick={() => {
+              setIsSignup(!isSignup);
+              setError('');
+              setSuccess('');
+            }}
             className="text-blue-500 hover:text-blue-600 text-sm"
           >
             {isSignup 
