@@ -230,8 +230,8 @@ const AnalystOS = () => {
   const [dailyGoals, setDailyGoals] = useState('');
   const [checkoutReflection, setCheckoutReflection] = useState('');
   const [disciplineRating, setDisciplineRating] = useState(5);
-  const [streak, setStreak] = useState(7);
-  const [weeklyWins, setWeeklyWins] = useState(3);
+  const [streak, setStreak] = useState(0);
+  const [weeklyWins, setWeeklyWins] = useState(0);
 
   // Data states - will be loaded from Supabase
   const [coverage, setCoverage] = useState([]);
@@ -246,6 +246,40 @@ const AnalystOS = () => {
   useEffect(() => {
     loadDataFromSupabase();
   }, []);
+
+  // Calculate streak and weekly wins from actual data
+  const calculateUserStats = (checkoutHistory) => {
+    if (!checkoutHistory || checkoutHistory.length === 0) {
+      setStreak(0);
+      setWeeklyWins(0);
+      return;
+    }
+
+    // Calculate current streak
+    let currentStreak = 0;
+    const today = new Date().toISOString().split('T')[0];
+    const sortedHistory = checkoutHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    for (let i = 0; i < sortedHistory.length; i++) {
+      const entry = sortedHistory[i];
+      const entryDate = new Date(entry.date);
+      const expectedDate = new Date();
+      expectedDate.setDate(expectedDate.getDate() - i);
+      
+      if (entryDate.toISOString().split('T')[0] === expectedDate.toISOString().split('T')[0]) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+    
+    setStreak(currentStreak);
+    
+    // Calculate weekly wins (last 7 days with rating >= 3)
+    const lastWeek = sortedHistory.slice(0, 7);
+    const weeklyWinsCount = lastWeek.filter(entry => entry.rating >= 3).length;
+    setWeeklyWins(weeklyWinsCount);
+  };
 
   const loadDataFromSupabase = async () => {
     try {
@@ -277,6 +311,9 @@ const AnalystOS = () => {
       if (todayCheckin && todayCheckin.goals) {
         setDailyGoals(Array.isArray(todayCheckin.goals) ? todayCheckin.goals.join('\n') : todayCheckin.goals);
       }
+
+      // Calculate streak and weekly wins
+      calculateUserStats(checkoutData);
     } catch (error) {
       console.error('Error loading data from Supabase:', error);
     } finally {
@@ -516,23 +553,15 @@ const AnalystOS = () => {
       });
       
       if (result.success) {
-        // Update streak and weekly wins
-        if (disciplineRating >= 3) {
-          setStreak(prev => prev + 1);
-          setWeeklyWins(prev => prev + 1);
-        } else {
-          setStreak(0);
-        }
-        
         // Clear form
         setCheckoutReflection('');
         setDisciplineRating(5);
         
-        // Force re-render of history
+        // Force re-render of history and recalculate stats
         setHistoryRefresh(prev => prev + 1);
-        await loadDataFromSupabase(); // Refresh data
+        await loadDataFromSupabase(); // This will recalculate streak and weekly wins
         
-        alert(`Day completed! ${disciplineRating >= 3 ? 'Streak continues!' : 'Focus better tomorrow.'}`);
+        alert(`Day completed! ${disciplineRating >= 3 ? 'Great job!' : 'Focus better tomorrow.'}`);
       } else {
         alert('Error saving checkout: ' + result.error.message);
       }
@@ -746,9 +775,15 @@ const AnalystOS = () => {
                 <span>This Week's Wins</span>
                 <span className="font-bold text-green-600">{weeklyWins}</span>
               </div>
-              <div className="text-sm text-gray-600">
-                Last shipped: AAPL Q1 analysis (yesterday)
-              </div>
+              {checkoutHistory.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  Start your daily check-ins to build momentum!
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600">
+                  Last shipped: {checkoutHistory[0]?.date || 'No recent activity'}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -883,7 +918,10 @@ const AnalystOS = () => {
                     </div>
                   ))}
                   {pipelineIdeas.filter(idea => idea.status === 'On Deck').length === 0 && (
-                    <p className="text-gray-500 text-center py-8">No ideas on deck</p>
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-2">No ideas on deck</p>
+                      <p className="text-sm text-gray-400">Add new investment ideas to start building your pipeline</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -940,7 +978,10 @@ const AnalystOS = () => {
                     </div>
                   ))}
                   {pipelineIdeas.filter(idea => idea.status === 'Core').length === 0 && (
-                    <p className="text-gray-500 text-center py-8">No core ideas</p>
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-2">No core ideas</p>
+                      <p className="text-sm text-gray-400">Move ideas from On Deck to Core for active research</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -983,7 +1024,10 @@ const AnalystOS = () => {
                     </div>
                   ))}
                   {pipelineIdeas.filter(idea => idea.status === 'Passed').length === 0 && (
-                    <p className="text-gray-500 text-center py-8">No passed ideas</p>
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-2">No passed ideas</p>
+                      <p className="text-sm text-gray-400">Ideas you decide to pass on will appear here</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1218,7 +1262,10 @@ const AnalystOS = () => {
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-500 text-center py-8">No companies match the search criteria</p>
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-2">No companies in coverage yet</p>
+                      <p className="text-sm text-gray-400">Add companies from your pipeline or directly to start tracking coverage</p>
+                    </div>
                   );
                 })()}
               </div>
