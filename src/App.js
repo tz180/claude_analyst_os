@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, Plus, Clock, Award } from 'lucide-react';
+import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, Plus, Clock, Award, LogOut, User } from 'lucide-react';
 import './App.css';
 import { 
   dailyCheckinServices, 
@@ -7,6 +7,8 @@ import {
   deliverablesServices, 
   pipelineServices 
 } from './supabaseServices';
+import { AuthProvider, useAuth } from './AuthContext';
+import Login from './components/Login';
 
 // ✅ MOVE TEXT INPUT COMPONENTS OUTSIDE - This prevents recreation
 const DisciplineEngine = ({ 
@@ -575,33 +577,108 @@ const AnalystOS = () => {
   };
 
   // ✅ Simple Navigation - no text inputs so can stay internal
-  const Navigation = () => (
-    <nav className="bg-slate-900 text-white p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Analyst OS</h1>
-        <div className="flex space-x-4">
-          {[
-            { key: 'dashboard', label: 'Dashboard', icon: TrendingUp },
-            { key: 'coverage', label: 'Coverage', icon: Target },
-            { key: 'pipeline', label: 'Pipeline', icon: Clock },
-            { key: 'memos', label: 'Memos/Models', icon: BookOpen },
-            { key: 'discipline', label: 'Discipline', icon: Award }
-          ].map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setCurrentView(key)}
-              className={`flex items-center space-x-2 px-3 py-2 rounded transition-colors ${
-                currentView === key ? 'bg-slate-700' : 'hover:bg-slate-800'
-              }`}
-            >
-              <Icon size={16} />
-              <span>{label}</span>
-            </button>
-          ))}
+  const Navigation = () => {
+    const { user, signOut } = useAuth();
+    const [showUserMenu, setShowUserMenu] = useState(false);
+
+    return (
+      <nav className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-8">
+              <h1 className="text-xl font-semibold text-gray-900">Analyst OS</h1>
+              <div className="flex space-x-1">
+                <button
+                  onClick={() => setCurrentView('dashboard')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentView === 'dashboard'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Dashboard
+                </button>
+                <button
+                  onClick={() => setCurrentView('coverage')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentView === 'coverage'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Coverage
+                </button>
+                <button
+                  onClick={() => setCurrentView('memos')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentView === 'memos'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Memos/Models
+                </button>
+                <button
+                  onClick={() => setCurrentView('pipeline')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentView === 'pipeline'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Pipeline
+                </button>
+                <button
+                  onClick={() => setCurrentView('checkin')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentView === 'checkin'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Daily Check-in
+                </button>
+              </div>
+            </div>
+
+            {/* User Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
+              >
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-sm font-medium">
+                  {user?.email?.split('@')[0] || 'User'}
+                </span>
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                  <div className="px-4 py-2 text-sm text-gray-700 border-b">
+                    <div className="font-medium">{user?.email}</div>
+                    <div className="text-gray-500">Signed in</div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await signOut();
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </nav>
-  );
+      </nav>
+    );
+  };
 
   // ✅ Simple Dashboard - no text inputs so can stay internal
   const Dashboard = () => {
@@ -1629,4 +1706,35 @@ const AnalystOS = () => {
   );
 };
 
-export default AnalystOS;
+// Main App Component with Authentication
+const AppWithAuth = () => {
+  const { user, loading, signOut } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
+  return <AnalystOS />;
+};
+
+// Wrap the main app with AuthProvider
+const App = () => {
+  return (
+    <AuthProvider>
+      <AppWithAuth />
+    </AuthProvider>
+  );
+};
+
+export default App;

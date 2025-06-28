@@ -1,5 +1,11 @@
 import { supabase } from './supabase';
 
+// Get current user ID from Supabase auth
+const getCurrentUserId = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id;
+};
+
 // Temporary: Remove user_id requirement for development
 // This will be restored when we implement proper authentication
 
@@ -7,10 +13,14 @@ import { supabase } from './supabase';
 export const dailyCheckinServices = {
   // Get today's check-in
   async getTodayCheckin() {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+
     const today = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
       .from('daily_checkins')
       .select('*')
+      .eq('user_id', userId)
       .eq('date', today)
       .single();
     
@@ -23,9 +33,13 @@ export const dailyCheckinServices = {
 
   // Get checkout history
   async getCheckoutHistory() {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
     const { data, error } = await supabase
       .from('daily_checkins')
       .select('*')
+      .eq('user_id', userId)
       .not('reflection', 'is', null)
       .order('date', { ascending: false })
       .limit(50);
@@ -43,9 +57,13 @@ export const dailyCheckinServices = {
 
   // Get goals history
   async getGoalsHistory() {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
     const { data, error } = await supabase
       .from('daily_checkins')
       .select('*')
+      .eq('user_id', userId)
       .not('goals', 'is', null)
       .order('date', { ascending: false })
       .limit(50);
@@ -63,10 +81,14 @@ export const dailyCheckinServices = {
 
   // Create or update daily check-in
   async upsertCheckin(checkinData) {
+    const userId = await getCurrentUserId();
+    if (!userId) return { success: false, error: 'User not authenticated' };
+
     const { data, error } = await supabase
       .from('daily_checkins')
       .upsert({
-        ...checkinData
+        ...checkinData,
+        user_id: userId
       });
     
     if (error) {
@@ -78,9 +100,13 @@ export const dailyCheckinServices = {
 
   // Mark goals as completed
   async markGoalsCompleted(date) {
+    const userId = await getCurrentUserId();
+    if (!userId) return { success: false, error: 'User not authenticated' };
+
     const { error } = await supabase
       .from('daily_checkins')
       .update({ completed: true })
+      .eq('user_id', userId)
       .eq('date', date);
     
     if (error) {
@@ -95,9 +121,13 @@ export const dailyCheckinServices = {
 export const coverageServices = {
   // Get active coverage
   async getActiveCoverage() {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
     const { data, error } = await supabase
       .from('coverage_universe')
       .select('*')
+      .eq('user_id', userId)
       .eq('status', 'active')
       .order('company_name');
     
@@ -118,9 +148,13 @@ export const coverageServices = {
 
   // Get former coverage
   async getFormerCoverage() {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
     const { data, error } = await supabase
       .from('coverage_universe')
       .select('*')
+      .eq('user_id', userId)
       .eq('status', 'former')
       .order('removal_date', { ascending: false });
     
@@ -143,9 +177,13 @@ export const coverageServices = {
 
   // Add new company to coverage
   async addCompany(companyData) {
+    const userId = await getCurrentUserId();
+    if (!userId) return { success: false, error: 'User not authenticated' };
+
     const { data, error } = await supabase
       .from('coverage_universe')
       .insert({
+        user_id: userId,
         ticker: companyData.ticker,
         company_name: companyData.company,
         sector: companyData.sector,
