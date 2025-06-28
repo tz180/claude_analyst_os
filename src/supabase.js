@@ -3,7 +3,24 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Check if environment variables are set
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase environment variables!')
+  console.error('Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY')
+  
+  // In development, show a helpful message
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Create a .env file in your project root with:')
+    console.error('REACT_APP_SUPABASE_URL=your_supabase_url')
+    console.error('REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key')
+  }
+}
+
+// Create Supabase client with fallback for missing env vars
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder_key'
+)
 
 // Auth helper functions
 export const auth = {

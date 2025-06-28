@@ -277,6 +277,8 @@ const AnalystOS = () => {
       }
     } catch (error) {
       console.error('Error loading data from Supabase:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -303,6 +305,7 @@ const AnalystOS = () => {
   const [newCompanyTicker, setNewCompanyTicker] = useState('');
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newCompanySector, setNewCompanySector] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -1579,38 +1582,49 @@ const AnalystOS = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      
-      {/* Notifications */}
-      {notifications.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 space-y-2">
-          {notifications.map((notification) => (
-            <div
-              key={notification.id}
-              className={`p-4 rounded-lg shadow-lg max-w-sm ${
-                notification.type === 'success' ? 'bg-green-500 text-white' :
-                notification.type === 'error' ? 'bg-red-500 text-white' :
-                notification.type === 'warning' ? 'bg-yellow-500 text-white' :
-                'bg-blue-500 text-white'
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <p className="text-sm font-medium">{notification.message}</p>
-                <button
-                  onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
-                  className="ml-2 text-white hover:text-gray-200"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          ))}
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading Analyst OS...</p>
+          </div>
         </div>
+      ) : (
+        <>
+          <Navigation />
+          
+          {/* Notifications */}
+          {notifications.length > 0 && (
+            <div className="fixed top-4 right-4 z-50 space-y-2">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`p-4 rounded-lg shadow-lg max-w-sm ${
+                    notification.type === 'success' ? 'bg-green-500 text-white' :
+                    notification.type === 'error' ? 'bg-red-500 text-white' :
+                    notification.type === 'warning' ? 'bg-yellow-500 text-white' :
+                    'bg-blue-500 text-white'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <p className="text-sm font-medium">{notification.message}</p>
+                    <button
+                      onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
+                      className="ml-2 text-white hover:text-gray-200"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <main className="container mx-auto px-4 py-8">
+            {renderCurrentView()}
+          </main>
+        </>
       )}
-      
-      <main className="container mx-auto px-4 py-8">
-        {renderCurrentView()}
-      </main>
     </div>
   );
 };
