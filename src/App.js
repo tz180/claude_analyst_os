@@ -1,6 +1,13 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, AlertTriangle, Plus, Edit3, Clock, Award } from 'lucide-react';
 import './App.css';
+import { migrateDataToSupabase, clearLocalStorage } from './dataMigration';
+import { 
+  dailyCheckinServices, 
+  coverageServices, 
+  deliverablesServices, 
+  pipelineServices 
+} from './supabaseServices';
 
 // ✅ MOVE TEXT INPUT COMPONENTS OUTSIDE - This prevents recreation
 const DisciplineEngine = ({ 
@@ -223,6 +230,8 @@ const PipelineManager = ({
   onShowAddIdeaModal, 
   newIdeaCompany, 
   onNewIdeaCompanyChange, 
+  newIdeaTicker,
+  onNewIdeaTickerChange,
   onAddPipelineIdea, 
   onMovePipelineToActive, 
   onArchivePipelineIdea,
@@ -248,18 +257,22 @@ const PipelineManager = ({
           <div key={idea.id} className="border rounded-lg p-4">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h3 className="font-semibold text-lg">{idea.company}</h3>
-                <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                  <span>Added: {idea.dateAdded}</span>
-                  <span className={`font-medium ${idea.daysInPipeline > 30 ? 'text-red-600' : 'text-gray-600'}`}>
-                    {idea.daysInPipeline} days in pipeline
-                  </span>
-                  {idea.daysInPipeline > 30 && (
-                    <span className="flex items-center text-red-600">
-                      <AlertTriangle size={16} className="mr-1" />
-                      Red Flag
+                <div className="flex items-center space-x-2">
+                  <h4 className="font-semibold">{idea.company}</h4>
+                  {idea.ticker && (
+                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                      {idea.ticker}
                     </span>
                   )}
+                  {idea.inCoverage && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                      In Coverage
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">
+                  <div>Added: {idea.dateAdded}</div>
+                  <div>{idea.daysInPipeline} days in pipeline</div>
                 </div>
               </div>
               <div className="flex space-x-2">
@@ -282,44 +295,6 @@ const PipelineManager = ({
         ))}
       </div>
     </div>
-
-    {/* Add Idea Modal */}
-    {showAddIdeaModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-96">
-          <h3 className="text-lg font-semibold mb-4">Add New Pipeline Idea</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Company Name
-              </label>
-              <input
-                type="text"
-                value={newIdeaCompany}
-                onChange={onNewIdeaCompanyChange}
-                className="w-full p-3 border rounded-lg"
-                placeholder="e.g., Palantir Technologies"
-                onKeyPress={(e) => e.key === 'Enter' && onAddPipelineIdea()}
-              />
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={onAddPipelineIdea}
-                className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
-              >
-                Add to Pipeline
-              </button>
-              <button
-                onClick={() => onShowAddIdeaModal(false)}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )}
   </div>
 );
 
@@ -331,39 +306,54 @@ const AnalystOS = () => {
   const [streak, setStreak] = useState(7);
   const [weeklyWins, setWeeklyWins] = useState(3);
 
-  // Sample data - will be loaded from localStorage
-  const [companies, setCompanies] = useState([
-    { id: 1, name: 'Apple Inc.', ticker: 'AAPL', lastModel: '2025-05-15', lastMemo: '2025-05-10', status: 'Active', sector: 'Tech' },
-    { id: 2, name: 'Microsoft Corp.', ticker: 'MSFT', lastModel: '2025-05-12', lastMemo: '2025-05-08', status: 'Active', sector: 'Tech' },
-    { id: 3, name: 'Nvidia Corp.', ticker: 'NVDA', lastModel: '2025-05-18', lastMemo: '2025-05-16', status: 'Active', sector: 'Tech' },
-    { id: 4, name: 'Tesla Inc.', ticker: 'TSLA', lastModel: '2024-04-28', lastMemo: '2024-04-25', status: 'Active', sector: 'Auto' },
-    { id: 5, name: 'Meta Platforms', ticker: 'META', lastModel: '2025-05-01', lastMemo: '2024-04-30', status: 'Active', sector: 'Tech' },
-    { id: 6, name: 'Snowflake Inc.', ticker: 'SNOW', lastModel: '2025-05-20', lastMemo: '2025-05-18', status: 'Active', sector: 'Tech' },
-  ]);
+  // Data states - will be loaded from Supabase
+  const [companies, setCompanies] = useState([]);
+  const [formerCompanies, setFormerCompanies] = useState([]);
+  const [pipelineIdeas, setPipelineIdeas] = useState([]);
+  const [memos, setMemos] = useState([]);
+  const [completedMemos, setCompletedMemos] = useState([]);
+  const [checkoutHistory, setCheckoutHistory] = useState([]);
+  const [goalsHistory, setGoalsHistory] = useState([]);
 
-  const [formerCompanies, setFormerCompanies] = useState([
-    { id: 7, name: 'Twitter Inc.', ticker: 'TWTR', lastModel: '2022-10-15', lastMemo: '2022-10-12', status: 'Former', sector: 'Tech', removedDate: '2022-10-28', removeReason: 'Bad business right now' },
-    { id: 8, name: 'Peloton Interactive', ticker: 'PTON', lastModel: '2023-03-20', lastMemo: '2023-03-18', status: 'Former', sector: 'Consumer', removedDate: '2023-04-15', removeReason: 'Valuation' },
-  ]);
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    loadDataFromSupabase();
+  }, []);
 
-  const [pipelineIdeas, setPipelineIdeas] = useState([
-    { id: 1, company: 'Palantir Technologies', dateAdded: '2025-05-01', status: 'On Deck', daysInPipeline: 21, inCoverage: false },
-    { id: 2, company: 'Snowflake Inc.', dateAdded: '2025-05-10', status: 'Core', daysInPipeline: 12, inCoverage: true },
-    { id: 3, company: 'CrowdStrike Holdings', dateAdded: '2025-04-15', status: 'Core', daysInPipeline: 37, inCoverage: false },
-    { id: 4, company: 'MongoDB Inc.', dateAdded: '2025-04-20', status: 'Passed', daysInPipeline: 32, passReason: 'Valuation', passDate: '2025-05-15', inCoverage: false },
-    { id: 5, company: 'Okta Inc.', dateAdded: '2025-04-10', status: 'Passed', daysInPipeline: 42, passReason: 'Management', passDate: '2025-05-10', inCoverage: false },
-  ]);
+  const loadDataFromSupabase = async () => {
+    try {
+      // Load coverage data
+      const activeCoverage = await coverageServices.getActiveCoverage();
+      const formerCoverage = await coverageServices.getFormerCoverage();
+      setCompanies(activeCoverage);
+      setFormerCompanies(formerCoverage);
 
-  const [memos, setMemos] = useState([
-    { id: 1, title: 'NVDA Q1 Earnings Deep Dive', type: 'Memo', stage: 'In Draft', priority: 'High', daysWorking: 3 },
-    { id: 2, title: 'Apple Services Revenue Model', type: 'Model', stage: 'Started', priority: 'Medium', daysWorking: 1 },
-    { id: 3, title: 'Big Tech Capex Comparison', type: 'Memo', stage: 'Sent', priority: 'High', daysWorking: 7 },
-  ]);
+      // Load pipeline ideas
+      const pipelineData = await pipelineServices.getPipelineIdeas();
+      setPipelineIdeas(pipelineData);
 
-  const [completedMemos, setCompletedMemos] = useState([
-    { id: 4, title: 'AAPL Q1 Earnings Analysis', type: 'Memo', stage: 'Completed', priority: 'High', daysWorking: 5, completedDate: '2025-05-20' },
-    { id: 5, title: 'MSFT Cloud Revenue Model', type: 'Model', stage: 'Completed', priority: 'Medium', daysWorking: 8, completedDate: '2025-05-18' },
-  ]);
+      // Load deliverables
+      const deliverablesData = await deliverablesServices.getDeliverables();
+      const activeDeliverables = deliverablesData.filter(d => d.stage !== 'completed');
+      const completedDeliverables = deliverablesData.filter(d => d.stage === 'completed');
+      setMemos(activeDeliverables);
+      setCompletedMemos(completedDeliverables);
+
+      // Load daily check-in data
+      const checkoutData = await dailyCheckinServices.getCheckoutHistory();
+      const goalsData = await dailyCheckinServices.getGoalsHistory();
+      setCheckoutHistory(checkoutData);
+      setGoalsHistory(goalsData);
+
+      // Load today's goals
+      const todayCheckin = await dailyCheckinServices.getTodayCheckin();
+      if (todayCheckin && todayCheckin.goals) {
+        setDailyGoals(Array.isArray(todayCheckin.goals) ? todayCheckin.goals.join('\n') : todayCheckin.goals);
+      }
+    } catch (error) {
+      console.error('Error loading data from Supabase:', error);
+    }
+  };
 
   // Modal states
   const [showAddIdeaModal, setShowAddIdeaModal] = useState(false);
@@ -371,6 +361,7 @@ const AnalystOS = () => {
   const [showPassModal, setShowPassModal] = useState(false);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [newIdeaCompany, setNewIdeaCompany] = useState('');
+  const [newIdeaTicker, setNewIdeaTicker] = useState('');
   const [newMemoTitle, setNewMemoTitle] = useState('');
   const [newMemoType, setNewMemoType] = useState('Memo');
   const [newMemoPriority, setNewMemoPriority] = useState('Medium');
@@ -394,6 +385,10 @@ const AnalystOS = () => {
     setNewIdeaCompany(e.target.value);
   };
 
+  const handleNewIdeaTickerChange = (e) => {
+    setNewIdeaTicker(e.target.value);
+  };
+
   const handleNewMemoTitleChange = (e) => {
     setNewMemoTitle(e.target.value);
   };
@@ -411,32 +406,41 @@ const AnalystOS = () => {
   };
 
   // Other functions
-  const addPipelineIdea = () => {
+  const addPipelineIdea = async () => {
     if (newIdeaCompany.trim()) {
-      const newIdea = {
-        id: Math.max(...pipelineIdeas.map(p => p.id), 0) + 1,
+      const result = await pipelineServices.addPipelineIdea({
         company: newIdeaCompany.trim(),
-        dateAdded: new Date().toISOString().split('T')[0],
-        status: 'On Deck',
-        daysInPipeline: 0,
-        inCoverage: false
-      };
-      setPipelineIdeas(prev => [...prev, newIdea]);
-      setNewIdeaCompany('');
-      setShowAddIdeaModal(false);
+        ticker: newIdeaTicker.trim(),
+        status: 'On Deck'
+      });
+      
+      if (result.success) {
+        setNewIdeaCompany('');
+        setNewIdeaTicker('');
+        setShowAddIdeaModal(false);
+        await loadDataFromSupabase(); // Refresh data
+      } else {
+        alert('Error adding pipeline idea: ' + result.error.message);
+      }
     }
   };
 
-  const moveToCore = (ideaId) => {
-    setPipelineIdeas(prev => prev.map(idea => 
-      idea.id === ideaId ? { ...idea, status: 'Core' } : idea
-    ));
+  const moveToCore = async (ideaId) => {
+    const result = await pipelineServices.updatePipelineStatus(ideaId, 'Core');
+    if (result.success) {
+      await loadDataFromSupabase(); // Refresh data
+    } else {
+      console.error('Error moving to core:', result.error);
+    }
   };
 
-  const moveToOnDeck = (ideaId) => {
-    setPipelineIdeas(prev => prev.map(idea => 
-      idea.id === ideaId ? { ...idea, status: 'On Deck' } : idea
-    ));
+  const moveToOnDeck = async (ideaId) => {
+    const result = await pipelineServices.updatePipelineStatus(ideaId, 'On Deck');
+    if (result.success) {
+      await loadDataFromSupabase(); // Refresh data
+    } else {
+      console.error('Error moving to on deck:', result.error);
+    }
   };
 
   const initiatePass = (ideaId) => {
@@ -444,19 +448,17 @@ const AnalystOS = () => {
     setShowPassModal(true);
   };
 
-  const confirmPass = () => {
+  const confirmPass = async () => {
     if (passingIdeaId) {
-      setPipelineIdeas(prev => prev.map(idea => 
-        idea.id === passingIdeaId ? { 
-          ...idea, 
-          status: 'Passed',
-          passReason: passReason,
-          passDate: new Date().toISOString().split('T')[0]
-        } : idea
-      ));
-      setShowPassModal(false);
-      setPassingIdeaId(null);
-      setPassReason('Not a Fit');
+      const result = await pipelineServices.updatePipelineStatus(passingIdeaId, 'Passed');
+      if (result.success) {
+        setShowPassModal(false);
+        setPassingIdeaId(null);
+        setPassReason('Not a Fit');
+        await loadDataFromSupabase(); // Refresh data
+      } else {
+        console.error('Error passing idea:', result.error);
+      }
     }
   };
 
@@ -466,42 +468,43 @@ const AnalystOS = () => {
     setPassReason('Not a Fit');
   };
 
-  const movePipelineToActive = (ideaId) => {
+  const movePipelineToActive = async (ideaId) => {
     const idea = pipelineIdeas.find(p => p.id === ideaId);
     if (idea && idea.status === 'Core') {
       // Check if already in coverage universe
-      const existsInCoverage = companies.some(c => c.name === idea.company);
+      const existsInCoverage = companies.some(c => c.company === idea.company);
       if (!existsInCoverage) {
-        const newCompany = {
-          id: Math.max(...companies.map(c => c.id), 0) + 1,
-          name: idea.company,
-          ticker: 'TBD',
-          lastModel: 'Never',
-          lastMemo: 'Never',
-          status: 'Active',
+        const result = await coverageServices.addCompany({
+          company: idea.company,
+          ticker: idea.ticker || 'TBD',
           sector: 'TBD'
-        };
-        setCompanies(prev => [...prev, newCompany]);
+        });
         
-        // Mark the pipeline idea as being in coverage
-        setPipelineIdeas(prev => prev.map(p => 
-          p.id === ideaId ? { ...p, inCoverage: true } : p
-        ));
-        
-        alert(`${idea.company} added to Coverage Universe and remains in Core pipeline for continued tracking.`);
+        if (result.success) {
+          await loadDataFromSupabase(); // Refresh data
+          alert(`${idea.company} (${idea.ticker || 'TBD'}) added to Coverage Universe and remains in Core pipeline for continued tracking.`);
+        } else {
+          alert('Error adding to coverage: ' + result.error.message);
+        }
       } else {
         alert(`${idea.company} is already in Coverage Universe.`);
       }
     }
   };
 
-  const archivePipelineIdea = (ideaId) => {
-    setPipelineIdeas(prev => prev.filter(p => p.id !== ideaId));
+  const archivePipelineIdea = async (ideaId) => {
+    const result = await pipelineServices.updatePipelineStatus(ideaId, 'Archived');
+    if (result.success) {
+      await loadDataFromSupabase(); // Refresh data
+    } else {
+      console.error('Error archiving idea:', result.error);
+    }
   };
 
   const cancelAddIdea = () => {
     setShowAddIdeaModal(false);
     setNewIdeaCompany('');
+    setNewIdeaTicker('');
   };
 
   // Quick action handlers for dashboard
@@ -522,172 +525,98 @@ const AnalystOS = () => {
 
   // Get checkout history from localStorage
   const getCheckoutHistory = () => {
-    try {
-      const history = localStorage.getItem('checkoutHistory');
-      const existing = history ? JSON.parse(history) : [];
-      
-      // Add sample data if no history exists
-      if (existing.length === 0) {
-        const sampleHistory = [
-          {
-            reflection: "Great day! Completed NVDA earnings model and sent first draft to team. Stayed focused throughout the day.",
-            rating: 5,
-            date: "2025-05-20"
-          },
-          {
-            reflection: "Solid progress on portfolio analysis. Got distracted by market news in afternoon but recovered well.",
-            rating: 4,
-            date: "2025-05-21"
-          },
-          {
-            reflection: "Struggled with focus today. Too many meetings interrupted deep work. Need better time blocking.",
-            rating: 2,
-            date: "2025-05-22"
-          },
-          {
-            reflection: "Much better! Implemented time blocking strategy. Finished memo review and started new pipeline research.",
-            rating: 4,
-            date: "2025-05-23"
-          },
-          {
-            reflection: "Excellent execution. Hit all major goals and even got ahead on tomorrow's prep work. Feeling very productive.",
-            rating: 5,
-            date: "2025-05-24"
-          }
-        ];
-        localStorage.setItem('checkoutHistory', JSON.stringify(sampleHistory));
-        return sampleHistory;
-      }
-      
-      return existing;
-    } catch (error) {
-      console.error('Error loading checkout history:', error);
-      return [];
-    }
+    return checkoutHistory;
   };
 
   // Get today's daily goals from localStorage
   const getTodayGoals = () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const dailyGoals = localStorage.getItem('dailyGoals');
-      const goalsHistory = dailyGoals ? JSON.parse(dailyGoals) : [];
-      
-      // Find today's goals
-      const todayGoals = goalsHistory.find(entry => entry.date === today);
-      return todayGoals ? todayGoals.goals : null;
-    } catch (error) {
-      console.error('Error loading daily goals:', error);
-      return null;
-    }
+    return dailyGoals;
   };
 
   // Get daily goals history from localStorage
   const getGoalsHistory = () => {
-    try {
-      const dailyGoals = localStorage.getItem('dailyGoals');
-      const goalsHistory = dailyGoals ? JSON.parse(dailyGoals) : [];
-      
-      // Sort by date (newest first) and return last 7 days
-      return goalsHistory
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .slice(0, 7);
-    } catch (error) {
-      console.error('Error loading goals history:', error);
-      return [];
-    }
+    return goalsHistory;
   };
 
-  const completeDailyCheckin = () => {
+  const completeDailyCheckin = async () => {
     if (dailyGoals.trim()) {
-      // Save daily goals to localStorage
       const today = new Date().toISOString().split('T')[0];
-      const dailyGoalsData = {
+      const result = await dailyCheckinServices.upsertCheckin({
         date: today,
-        goals: dailyGoals.trim(),
+        goals: [dailyGoals.trim()],
         completed: false
-      };
+      });
       
-      // Get existing daily goals
-      const existingGoals = localStorage.getItem('dailyGoals');
-      const goalsHistory = existingGoals ? JSON.parse(existingGoals) : [];
-      
-      // Remove any existing goals for today and add the new ones
-      const filteredGoals = goalsHistory.filter(entry => entry.date !== today);
-      const updatedGoals = [...filteredGoals, dailyGoalsData];
-      
-      // Save to localStorage
-      localStorage.setItem('dailyGoals', JSON.stringify(updatedGoals));
-      
-      // Clear the input field
-      setDailyGoals('');
-      
-      // Force dashboard refresh
-      setGoalsRefresh(prev => prev + 1);
-      
-      alert('Daily goals set! Stay focused and crush your deliverables.');
+      if (result.success) {
+        setDailyGoals('');
+        setGoalsRefresh(prev => prev + 1);
+        await loadDataFromSupabase(); // Refresh data
+        alert('Daily goals set! Stay focused and crush your deliverables.');
+      } else {
+        alert('Error saving goals: ' + result.error.message);
+      }
     }
   };
 
   // Mark daily goals as completed
-  const markGoalsCompleted = (date) => {
-    try {
-      const dailyGoals = localStorage.getItem('dailyGoals');
-      const goalsHistory = dailyGoals ? JSON.parse(dailyGoals) : [];
-      
-      const updatedGoals = goalsHistory.map(entry => 
-        entry.date === date ? { ...entry, completed: true } : entry
-      );
-      
-      localStorage.setItem('dailyGoals', JSON.stringify(updatedGoals));
+  const markGoalsCompleted = async (date) => {
+    const result = await dailyCheckinServices.markGoalsCompleted(date);
+    if (result.success) {
       setGoalsRefresh(prev => prev + 1);
-    } catch (error) {
-      console.error('Error marking goals as completed:', error);
+      await loadDataFromSupabase(); // Refresh data
+    } else {
+      console.error('Error marking goals as completed:', result.error);
     }
   };
 
-  const completeDailyCheckout = () => {
+  const completeDailyCheckout = async () => {
     if (checkoutReflection.trim()) {
-      // Create new check-out entry
-      const newCheckout = {
+      const today = new Date().toISOString().split('T')[0];
+      const result = await dailyCheckinServices.upsertCheckin({
+        date: today,
         reflection: checkoutReflection.trim(),
-        rating: disciplineRating,
-        date: new Date().toISOString().split('T')[0]
-      };
+        completed: true
+      });
       
-      // Get existing history and add new entry
-      const existingHistory = getCheckoutHistory();
-      const updatedHistory = [...existingHistory, newCheckout];
-      
-      // Save to localStorage
-      localStorage.setItem('checkoutHistory', JSON.stringify(updatedHistory));
-      
-      // Update streak and weekly wins
-      if (disciplineRating >= 3) {
-        setStreak(prev => prev + 1);
-        setWeeklyWins(prev => prev + 1);
+      if (result.success) {
+        // Update streak and weekly wins
+        if (disciplineRating >= 3) {
+          setStreak(prev => prev + 1);
+          setWeeklyWins(prev => prev + 1);
+        } else {
+          setStreak(0);
+        }
+        
+        // Clear form
+        setCheckoutReflection('');
+        setDisciplineRating(5);
+        
+        // Force re-render of history
+        setHistoryRefresh(prev => prev + 1);
+        await loadDataFromSupabase(); // Refresh data
+        
+        alert(`Day completed! ${disciplineRating >= 3 ? 'Streak continues!' : 'Focus better tomorrow.'}`);
       } else {
-        setStreak(0);
+        alert('Error saving checkout: ' + result.error.message);
       }
-      
-      // Clear form
-      setCheckoutReflection('');
-      setDisciplineRating(5);
-      
-      // Force re-render of history
-      setHistoryRefresh(prev => prev + 1);
-      
-      alert(`Day completed! ${disciplineRating >= 3 ? 'Streak continues!' : 'Focus better tomorrow.'}`);
     }
   };
 
   // Utility functions
   const getDaysAgo = (dateString) => {
-    if (dateString === 'Never') return Infinity;
-    const date = new Date(dateString);
-    const today = new Date();
-    const diffTime = Math.abs(today - date);
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (!dateString || dateString === 'Never' || dateString === 'TBD') return Infinity;
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return Infinity; // Invalid date
+      
+      const today = new Date();
+      const diffTime = Math.abs(today - date);
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    } catch (error) {
+      console.error('Error calculating days ago for:', dateString, error);
+      return Infinity;
+    }
   };
 
   const getStatusColor = (status) => {
@@ -831,6 +760,19 @@ const AnalystOS = () => {
                 className="w-full p-3 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
                 Create New Memo/Model
               </button>
+              <button 
+                onClick={async () => {
+                  const result = await migrateDataToSupabase();
+                  if (result.success) {
+                    alert('Data migrated to Supabase successfully!');
+                    clearLocalStorage();
+                  } else {
+                    alert('Migration failed: ' + result.error);
+                  }
+                }}
+                className="w-full p-3 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors">
+                Migrate to Supabase
+              </button>
             </div>
           </div>
         </div>
@@ -880,6 +822,11 @@ const AnalystOS = () => {
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
                             <h4 className="font-semibold">{idea.company}</h4>
+                            {idea.ticker && (
+                              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                                {idea.ticker}
+                              </span>
+                            )}
                             {idea.inCoverage && (
                               <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
                                 In Coverage
@@ -925,7 +872,14 @@ const AnalystOS = () => {
                     <div key={idea.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h4 className="font-semibold">{idea.company}</h4>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-semibold">{idea.company}</h4>
+                            {idea.ticker && (
+                              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                                {idea.ticker}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-600 mt-1">
                             <div>Added: {idea.dateAdded}</div>
                             <div>{idea.daysInPipeline} days in pipeline</div>
@@ -975,7 +929,14 @@ const AnalystOS = () => {
                     <div key={idea.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h4 className="font-semibold">{idea.company}</h4>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-semibold">{idea.company}</h4>
+                            {idea.ticker && (
+                              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                                {idea.ticker}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-600 mt-1">
                             <div>Added: {idea.dateAdded}</div>
                             <div className="text-red-600 font-medium">Passed: {idea.passReason}</div>
@@ -999,7 +960,7 @@ const AnalystOS = () => {
               </div>
             </div>
 
-            {/* Add Idea Modal */}
+            {/* Add Pipeline Idea Modal */}
             {showAddIdeaModal && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg p-6 w-96">
@@ -1015,6 +976,19 @@ const AnalystOS = () => {
                         onChange={handleNewIdeaCompanyChange}
                         className="w-full p-3 border rounded-lg"
                         placeholder="e.g., Palantir Technologies"
+                        onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ticker
+                      </label>
+                      <input
+                        type="text"
+                        value={newIdeaTicker}
+                        onChange={handleNewIdeaTickerChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., PLTR"
                         onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
                       />
                     </div>
@@ -1366,33 +1340,17 @@ const AnalystOS = () => {
                         <div className="flex items-center space-x-2">
                           <span className="text-xs font-medium text-gray-600 w-12">Stage:</span>
                           <button
-                            onClick={() => {
-                              const stages = ['Started', 'In Draft', 'Sent'];
-                              const currentIndex = stages.indexOf(memo.stage);
-                              const prevStage = currentIndex > 0 ? stages[currentIndex - 1] : memo.stage;
-                              const updatedMemos = memos.map(m => 
-                                m.id === memo.id ? { ...m, stage: prevStage } : m
-                              );
-                              setMemos(updatedMemos);
-                            }}
-                            disabled={memo.stage === 'Started'}
-                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                              memo.stage === 'Started'
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'bg-gray-500 text-white hover:bg-gray-600'
-                            }`}
-                          >
-                            ← Prev
-                          </button>
-                          <button
-                            onClick={() => {
+                            onClick={async () => {
                               const stages = ['Started', 'In Draft', 'Sent'];
                               const currentIndex = stages.indexOf(memo.stage);
                               const nextStage = currentIndex < stages.length - 1 ? stages[currentIndex + 1] : memo.stage;
-                              const updatedMemos = memos.map(m => 
-                                m.id === memo.id ? { ...m, stage: nextStage } : m
-                              );
-                              setMemos(updatedMemos);
+                              
+                              const result = await deliverablesServices.updateDeliverableStage(memo.id, nextStage);
+                              if (result.success) {
+                                await loadDataFromSupabase(); // Refresh data
+                              } else {
+                                console.error('Error updating stage:', result.error);
+                              }
                             }}
                             disabled={memo.stage === 'Sent'}
                             className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
@@ -1409,29 +1367,25 @@ const AnalystOS = () => {
                         <div className="flex items-center space-x-2">
                           <span className="text-xs font-medium text-gray-600 w-12">Actions:</span>
                           <button 
-                            onClick={() => {
-                              const today = new Date().toISOString().split('T')[0];
-                              const completedMemo = {
-                                ...memo,
-                                stage: 'Completed',
-                                completedDate: today
-                              };
-                              
-                              // Remove from active memos
-                              setMemos(prev => prev.filter(m => m.id !== memo.id));
-                              
-                              // Add to completed memos
-                              setCompletedMemos(prev => [...prev, completedMemo]);
+                            onClick={async () => {
+                              const result = await deliverablesServices.updateDeliverableStage(memo.id, 'completed');
+                              if (result.success) {
+                                await loadDataFromSupabase(); // Refresh data
+                              } else {
+                                console.error('Error completing deliverable:', result.error);
+                              }
                             }}
                             className="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-green-600">
                             Complete
                           </button>
                           <button 
-                            onClick={() => {
-                              const updatedMemos = memos.map(m => 
-                                m.id === memo.id ? { ...m, stage: 'Stalled' } : m
-                              );
-                              setMemos(updatedMemos);
+                            onClick={async () => {
+                              const result = await deliverablesServices.updateDeliverableStage(memo.id, 'stalled');
+                              if (result.success) {
+                                await loadDataFromSupabase(); // Refresh data
+                              } else {
+                                console.error('Error stalling deliverable:', result.error);
+                              }
                             }}
                             className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-red-600">
                             Stall
@@ -1530,19 +1484,22 @@ const AnalystOS = () => {
                     </div>
                     <div className="flex space-x-3">
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (newMemoTitle.trim()) {
-                            const newMemo = {
-                              id: Math.max(...memos.map(m => m.id), 0) + 1,
+                            const result = await deliverablesServices.addDeliverable({
                               title: newMemoTitle.trim(),
                               type: newMemoType,
                               stage: 'Started',
-                              priority: newMemoPriority,
-                              daysWorking: 0
-                            };
-                            setMemos(prev => [...prev, newMemo]);
-                            setNewMemoTitle('');
-                            setShowAddMemoModal(false);
+                              priority: newMemoPriority
+                            });
+                            
+                            if (result.success) {
+                              setNewMemoTitle('');
+                              setShowAddMemoModal(false);
+                              await loadDataFromSupabase(); // Refresh data
+                            } else {
+                              alert('Error creating deliverable: ' + result.error.message);
+                            }
                           }
                         }}
                         className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
@@ -1568,47 +1525,37 @@ const AnalystOS = () => {
   };
 
   // Update last model date for a company
-  const updateLastModel = (companyId) => {
-    const today = new Date().toISOString().split('T')[0];
-    setCompanies(prev => prev.map(company => 
-      company.id === companyId 
-        ? { ...company, lastModel: today }
-        : company
-    ));
+  const updateLastModel = async (companyId) => {
+    const result = await coverageServices.updateLastModel(companyId);
+    if (result.success) {
+      await loadDataFromSupabase(); // Refresh data
+    } else {
+      console.error('Error updating last model:', result.error);
+    }
   };
 
   // Update last memo date for a company
-  const updateLastMemo = (companyId) => {
-    const today = new Date().toISOString().split('T')[0];
-    setCompanies(prev => prev.map(company => 
-      company.id === companyId 
-        ? { ...company, lastMemo: today }
-        : company
-    ));
+  const updateLastMemo = async (companyId) => {
+    const result = await coverageServices.updateLastMemo(companyId);
+    if (result.success) {
+      await loadDataFromSupabase(); // Refresh data
+    } else {
+      console.error('Error updating last memo:', result.error);
+    }
   };
 
   // Move company to former coverage
-  const moveToFormerCoverage = (companyId) => {
-    const company = companies.find(c => c.id === companyId);
-    if (company) {
-      const today = new Date().toISOString().split('T')[0];
-      const formerCompany = {
-        ...company,
-        status: 'Former',
-        removedDate: today,
-        removeReason: removeReason
-      };
-      
-      // Remove from active coverage
-      setCompanies(prev => prev.filter(c => c.id !== companyId));
-      
-      // Add to former coverage
-      setFormerCompanies(prev => [...prev, formerCompany]);
+  const moveToFormerCoverage = async (companyId) => {
+    const result = await coverageServices.moveToFormerCoverage(companyId, removeReason);
+    if (result.success) {
+      await loadDataFromSupabase(); // Refresh data
       
       // Reset modal state
       setShowRemoveModal(false);
       setRemovingCompanyId(null);
       setRemoveReason('Not a fit');
+    } else {
+      console.error('Error moving to former coverage:', result.error);
     }
   };
 
