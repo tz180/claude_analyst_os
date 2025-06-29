@@ -251,9 +251,13 @@ export const coverageServices = {
 export const deliverablesServices = {
   // Get all deliverables
   async getDeliverables() {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
     const { data, error } = await supabase
       .from('deliverables')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -261,25 +265,18 @@ export const deliverablesServices = {
       return [];
     }
     
-    // Convert priority integers back to strings for display
-    const priorityMap = {
-      1: 'High',
-      2: 'Medium',
-      3: 'Low'
-    };
-    
     return data.map(item => ({
       id: item.id,
       title: item.title,
-      type: item.type,
-      stage: item.stage,
-      priority: priorityMap[item.priority] || 'Medium',
+      type: item.type || 'memo',
+      stage: item.stage || 'started',
+      priority: item.priority || 'Medium',
       ticker: item.ticker,
       company: item.company_name,
       notes: item.notes,
       dueDate: item.due_date,
       completedDate: item.completed_date,
-      daysWorking: 0 // Calculate this if needed
+      daysWorking: item.created_at ? Math.ceil((new Date() - new Date(item.created_at)) / (1000 * 60 * 60 * 24)) : 0
     }));
   },
 
@@ -349,30 +346,32 @@ export const deliverablesServices = {
 
 // Pipeline Ideas Services
 export const pipelineServices = {
-  // Get all pipeline ideas
+  // Get pipeline ideas
   async getPipelineIdeas() {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
     const { data, error } = await supabase
       .from('pipeline_ideas')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
     
     if (error) {
       console.error('Error fetching pipeline ideas:', error);
       return [];
     }
+    
     return data.map(item => ({
       id: item.id,
       company: item.company_name,
       ticker: item.ticker,
-      type: item.idea_type,
-      thesis: item.thesis,
-      catalyst: item.catalyst,
-      targetPrice: item.target_price,
-      status: item.status,
-      priority: item.priority,
-      dateAdded: item.created_at.split('T')[0],
-      daysInPipeline: Math.floor((new Date() - new Date(item.created_at)) / (1000 * 60 * 60 * 24)),
-      inCoverage: false // This would need to be calculated based on coverage
+      status: item.status || 'On Deck',
+      dateAdded: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown',
+      daysInPipeline: item.created_at ? Math.ceil((new Date() - new Date(item.created_at)) / (1000 * 60 * 60 * 24)) : 0,
+      passReason: item.pass_reason,
+      passDate: item.pass_date,
+      inCoverage: false // This will be calculated separately
     }));
   },
 
