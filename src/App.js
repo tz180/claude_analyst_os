@@ -249,6 +249,7 @@ const AnalystOS = () => {
   const [pipelineIdeas, setPipelineIdeas] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [goalsHistory, setGoalsHistory] = useState([]);
 
   // Pipeline states
   const [newIdeaCompany, setNewIdeaCompany] = useState('');
@@ -281,15 +282,44 @@ const AnalystOS = () => {
 
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
-    // Simple defensive check - if anything goes wrong, return default values
     try {
       if (!checkoutHistory || !Array.isArray(checkoutHistory) || checkoutHistory.length === 0) {
         return { streak: 0, weeklyWins: 0 };
       }
       
-      // For now, just return default values to prevent the sort error
-      // We can implement proper streak calculation later when the data is stable
-      return { streak: 0, weeklyWins: 0 };
+      // Calculate streak without sorting - just check recent entries
+      let currentStreak = 0;
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      // Check if there's a checkout for today
+      const hasToday = checkoutHistory.some(entry => entry.date === today);
+      if (hasToday) {
+        currentStreak = 1;
+        
+        // Count consecutive days backwards from today
+        let checkDate = yesterday;
+        for (let i = 1; i <= 30; i++) { // Limit to 30 days to prevent infinite loop
+          const hasEntry = checkoutHistory.some(entry => entry.date === checkDate);
+          if (hasEntry) {
+            currentStreak++;
+            checkDate = new Date(Date.now() - (i + 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          } else {
+            break;
+          }
+        }
+      }
+      
+      // Calculate weekly wins (last 7 days with rating >= 3)
+      const lastWeek = checkoutHistory.filter(entry => {
+        const entryDate = new Date(entry.date);
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        return entryDate >= weekAgo && entry.rating >= 3;
+      });
+      
+      const weeklyWinsCount = lastWeek.length;
+      
+      return { streak: currentStreak, weeklyWins: weeklyWinsCount };
     } catch (error) {
       console.error('calculateUserStats: Error during calculation:', error);
       return { streak: 0, weeklyWins: 0 };
@@ -302,12 +332,14 @@ const AnalystOS = () => {
       console.log('Starting loadDataFromSupabase...');
       const [
         checkoutHistoryData,
+        goalsHistoryData,
         activeCoverageData,
         formerCoverageData,
         deliverablesData,
         pipelineIdeasData
       ] = await Promise.allSettled([
         dailyCheckinServices.getCheckoutHistory(),
+        dailyCheckinServices.getGoalsHistory(),
         coverageServices.getActiveCoverage(),
         coverageServices.getFormerCoverage(),
         deliverablesServices.getDeliverables(),
@@ -324,6 +356,7 @@ const AnalystOS = () => {
 
       // Handle results safely with detailed logging
       const checkoutHistoryResult = checkoutHistoryData.status === 'fulfilled' ? checkoutHistoryData.value : [];
+      const goalsHistoryResult = goalsHistoryData.status === 'fulfilled' ? goalsHistoryData.value : [];
       const activeCoverageResult = activeCoverageData.status === 'fulfilled' ? activeCoverageData.value : [];
       const formerCoverageResult = formerCoverageData.status === 'fulfilled' ? formerCoverageData.value : [];
       const deliverablesResult = deliverablesData.status === 'fulfilled' ? deliverablesData.value : [];
@@ -343,6 +376,7 @@ const AnalystOS = () => {
       });
 
       setCheckoutHistory(checkoutHistoryResult);
+      setGoalsHistory(goalsHistoryResult);
       setCoverage(activeCoverageResult);
       setFormerCompanies(formerCoverageResult);
       setMemos(deliverablesResult.filter(d => d.stage !== 'completed'));
@@ -529,24 +563,23 @@ const AnalystOS = () => {
     return checkoutHistory;
   };
 
-  // Get today's daily goals from localStorage
+  // Get today's daily goals from goalsHistory
   const getTodayGoals = () => {
-    console.log('getTodayGoals called with checkoutHistory:', checkoutHistory);
-    console.log('Type of checkoutHistory in getTodayGoals:', typeof checkoutHistory);
-    console.log('Is Array in getTodayGoals:', Array.isArray(checkoutHistory));
+    console.log('getTodayGoals called with goalsHistory:', goalsHistory);
     
-    if (!checkoutHistory || !Array.isArray(checkoutHistory)) {
-      console.log('checkoutHistory is not an array in getTodayGoals, returning empty string');
+    if (!goalsHistory || !Array.isArray(goalsHistory)) {
+      console.log('goalsHistory is not an array in getTodayGoals, returning empty string');
       return '';
     }
     
-    const todayEntry = checkoutHistory.find(entry => entry.date === new Date().toLocaleDateString());
+    const today = new Date().toISOString().split('T')[0];
+    const todayEntry = goalsHistory.find(entry => entry.date === today);
     return todayEntry ? todayEntry.goals : '';
   };
 
-  // Get daily goals history from localStorage
+  // Get daily goals history from state
   const getGoalsHistory = () => {
-    return checkoutHistory;
+    return goalsHistory;
   };
 
   const completeDailyCheckin = async () => {
