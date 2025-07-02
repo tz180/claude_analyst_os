@@ -1234,6 +1234,7 @@ const AnalystOS = () => {
                 <button 
                   onClick={() => {
                     console.log('Add Company button clicked');
+                    console.log('Current view:', currentView);
                     setShowAddCompanyModal(true);
                   }}
                   className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
@@ -1452,11 +1453,13 @@ const AnalystOS = () => {
               </div>
             )}
 
-            {/* Add Company Modal */}
+            {/* Add Company Modal - COVERAGE PAGE */}
+            {console.log('Coverage page - showAddCompanyModal state:', showAddCompanyModal)}
             {showAddCompanyModal && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-96">
-                  <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage</h3>
+                {console.log('Rendering Add Company Modal in Coverage page')}
+                <div className="bg-white rounded-lg p-6 w-96" style={{border: '3px solid red'}}>
+                  <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage (COVERAGE PAGE)</h3>
                   <div className="space-y-4">
                     {addCompanyError && (
                       <div className="text-red-600 text-sm mb-2">{addCompanyError}</div>
