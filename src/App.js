@@ -281,7 +281,7 @@ const AnalystOS = () => {
 
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
-    if (!checkoutHistory || checkoutHistory.length === 0) {
+    if (!checkoutHistory || !Array.isArray(checkoutHistory) || checkoutHistory.length === 0) {
       return { streak: 0, weeklyWins: 0 };
     }
 
@@ -342,7 +342,7 @@ const AnalystOS = () => {
       setPipelineIdeas(pipelineIdeasResult);
 
       // Calculate user stats from checkout history
-      const userStats = calculateUserStats(checkoutHistoryData);
+      const userStats = calculateUserStats(checkoutHistoryResult);
       if (userStats) {
         setStreak(userStats.streak || 0);
         setWeeklyWins(userStats.weeklyWins || 0);
