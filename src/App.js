@@ -771,10 +771,10 @@ const AnalystOS = () => {
           <PipelineVelocityCard pipelineVelocity={analytics?.pipelineVelocity} />
         </div>
 
-        {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CoverageActivityCard coverageActivity={analytics?.coverageActivity} />
-          <ProductivityMetricsCard productivityMetrics={analytics?.productivityMetrics} />
-        </div> */}
+          {/* <ProductivityMetricsCard productivityMetrics={analytics?.productivityMetrics} /> */}
+        </div>
 
         {/* Quick Actions */}
         <div className="bg-white p-6 rounded-lg shadow-sm border">
