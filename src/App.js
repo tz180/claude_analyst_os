@@ -1201,75 +1201,6 @@ const AnalystOS = () => {
                 </div>
               </div>
             )}
-
-            {/* Add Company Modal */}
-            {console.log('showAddCompanyModal state:', showAddCompanyModal)}
-            {showAddCompanyModal && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                {console.log('Rendering Add Company Modal')}
-                <div className="bg-white rounded-lg p-6 w-96">
-                  <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage</h3>
-                  <div className="space-y-4">
-                    {addCompanyError && (
-                      <div className="text-red-600 text-sm mb-2">{addCompanyError}</div>
-                    )}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Company Name
-                      </label>
-                      <input
-                        type="text"
-                        value={newCompanyName}
-                        onChange={handleNewCompanyNameChange}
-                        className="w-full p-3 border rounded-lg"
-                        placeholder="e.g., Apple Inc."
-                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Ticker
-                      </label>
-                      <input
-                        type="text"
-                        value={newCompanyTicker}
-                        onChange={handleNewCompanyTickerChange}
-                        className="w-full p-3 border rounded-lg"
-                        placeholder="e.g., AAPL"
-                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Sector
-                      </label>
-                      <input
-                        type="text"
-                        value={newCompanySector}
-                        onChange={handleNewCompanySectorChange}
-                        className="w-full p-3 border rounded-lg"
-                        placeholder="e.g., Technology"
-                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
-                      />
-                    </div>
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={addCompany}
-                        className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
-                      >
-                        Add to Coverage
-                      </button>
-                      <button
-                        onClick={cancelAddCompany}
-                        className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         );
       case 'discipline': 
@@ -1511,6 +1442,73 @@ const AnalystOS = () => {
                       </button>
                       <button
                         onClick={cancelRemove}
+                        className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Add Company Modal */}
+            {showAddCompanyModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-96">
+                  <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage</h3>
+                  <div className="space-y-4">
+                    {addCompanyError && (
+                      <div className="text-red-600 text-sm mb-2">{addCompanyError}</div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Company Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompanyName}
+                        onChange={handleNewCompanyNameChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., Apple Inc."
+                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ticker
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompanyTicker}
+                        onChange={handleNewCompanyTickerChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., AAPL"
+                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Sector
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompanySector}
+                        onChange={handleNewCompanySectorChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., Technology"
+                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={addCompany}
+                        className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
+                      >
+                        Add to Coverage
+                      </button>
+                      <button
+                        onClick={cancelAddCompany}
                         className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
                       >
                         Cancel
