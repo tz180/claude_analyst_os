@@ -282,31 +282,50 @@ const AnalystOS = () => {
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
     console.log('calculateUserStats input:', checkoutHistory);
+    console.log('calculateUserStats input type:', typeof checkoutHistory);
+    console.log('calculateUserStats input constructor:', checkoutHistory?.constructor?.name);
+    
+    // More defensive checks
+    if (!checkoutHistory) {
+      console.log('calculateUserStats: checkoutHistory is null/undefined');
+      return { streak: 0, weeklyWins: 0 };
+    }
+    
     if (!Array.isArray(checkoutHistory)) {
       console.error('calculateUserStats: checkoutHistory is not an array!', checkoutHistory);
+      console.error('calculateUserStats: checkoutHistory type:', typeof checkoutHistory);
+      console.error('calculateUserStats: checkoutHistory constructor:', checkoutHistory?.constructor?.name);
       return { streak: 0, weeklyWins: 0 };
     }
+    
     if (checkoutHistory.length === 0) {
+      console.log('calculateUserStats: checkoutHistory is empty array');
       return { streak: 0, weeklyWins: 0 };
     }
-    // Defensive copy before sort
-    const sortedHistory = [...checkoutHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
-    let currentStreak = 0;
-    const today = new Date().toISOString().split('T')[0];
-    for (let i = 0; i < sortedHistory.length; i++) {
-      const entry = sortedHistory[i];
-      const entryDate = new Date(entry.date);
-      const expectedDate = new Date();
-      expectedDate.setDate(expectedDate.getDate() - i);
-      if (entryDate.toISOString().split('T')[0] === expectedDate.toISOString().split('T')[0]) {
-        currentStreak++;
-      } else {
-        break;
+    
+    try {
+      // Defensive copy before sort
+      const sortedHistory = [...checkoutHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
+      let currentStreak = 0;
+      const today = new Date().toISOString().split('T')[0];
+      for (let i = 0; i < sortedHistory.length; i++) {
+        const entry = sortedHistory[i];
+        const entryDate = new Date(entry.date);
+        const expectedDate = new Date();
+        expectedDate.setDate(expectedDate.getDate() - i);
+        if (entryDate.toISOString().split('T')[0] === expectedDate.toISOString().split('T')[0]) {
+          currentStreak++;
+        } else {
+          break;
+        }
       }
+      const lastWeek = sortedHistory.slice(0, 7);
+      const weeklyWinsCount = lastWeek.filter(entry => entry.rating >= 3).length;
+      return { streak: currentStreak, weeklyWins: weeklyWinsCount };
+    } catch (error) {
+      console.error('calculateUserStats: Error during calculation:', error);
+      return { streak: 0, weeklyWins: 0 };
     }
-    const lastWeek = sortedHistory.slice(0, 7);
-    const weeklyWinsCount = lastWeek.filter(entry => entry.rating >= 3).length;
-    return { streak: currentStreak, weeklyWins: weeklyWinsCount };
   };
 
   const loadDataFromSupabase = async () => {
@@ -335,12 +354,20 @@ const AnalystOS = () => {
         pipelineIdeasData
       });
 
-      // Handle results safely
+      // Handle results safely with detailed logging
       const checkoutHistoryResult = checkoutHistoryData.status === 'fulfilled' ? checkoutHistoryData.value : [];
       const activeCoverageResult = activeCoverageData.status === 'fulfilled' ? activeCoverageData.value : [];
       const formerCoverageResult = formerCoverageData.status === 'fulfilled' ? formerCoverageData.value : [];
       const deliverablesResult = deliverablesData.status === 'fulfilled' ? deliverablesData.value : [];
       const pipelineIdeasResult = pipelineIdeasData.status === 'fulfilled' ? pipelineIdeasData.value : [];
+
+      console.log('Detailed result analysis:');
+      console.log('checkoutHistoryData.status:', checkoutHistoryData.status);
+      console.log('checkoutHistoryData.value:', checkoutHistoryData.value);
+      console.log('checkoutHistoryData.reason:', checkoutHistoryData.reason);
+      console.log('checkoutHistoryResult:', checkoutHistoryResult);
+      console.log('checkoutHistoryResult type:', typeof checkoutHistoryResult);
+      console.log('checkoutHistoryResult isArray:', Array.isArray(checkoutHistoryResult));
 
       console.log('Processed results:', {
         checkoutHistoryResult,
