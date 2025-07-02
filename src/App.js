@@ -1203,6 +1203,7 @@ const AnalystOS = () => {
             )}
 
             {/* Add Company Modal */}
+            {console.log('showAddCompanyModal state:', showAddCompanyModal)}
             {showAddCompanyModal && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 {console.log('Rendering Add Company Modal')}
@@ -1300,7 +1301,10 @@ const AnalystOS = () => {
                   <p className="text-gray-600">Manage your active and former coverage</p>
             </div>
                 <button 
-                  onClick={() => setShowAddCompanyModal(true)}
+                  onClick={() => {
+                    console.log('Add Company button clicked');
+                    setShowAddCompanyModal(true);
+                  }}
                   className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
                   <Plus size={16} className="mr-2" />
                   Add Company
