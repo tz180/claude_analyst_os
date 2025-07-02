@@ -319,7 +319,7 @@ const AnalystOS = () => {
         formerCoverageData,
         deliverablesData,
         pipelineIdeasData
-      ] = await Promise.all([
+      ] = await Promise.allSettled([
         dailyCheckinServices.getCheckoutHistory(),
         coverageServices.getActiveCoverage(),
         coverageServices.getFormerCoverage(),
@@ -327,17 +327,29 @@ const AnalystOS = () => {
         pipelineServices.getPipelineIdeas()
       ]);
 
-      setCheckoutHistory(checkoutHistoryData);
-      setCoverage(activeCoverageData);
-      setFormerCompanies(formerCoverageData);
-      setMemos(deliverablesData.filter(d => d.stage !== 'completed'));
-      setCompletedMemos(deliverablesData.filter(d => d.stage === 'completed'));
-      setPipelineIdeas(pipelineIdeasData);
+      // Handle results safely
+      const checkoutHistoryResult = checkoutHistoryData.status === 'fulfilled' ? checkoutHistoryData.value : [];
+      const activeCoverageResult = activeCoverageData.status === 'fulfilled' ? activeCoverageData.value : [];
+      const formerCoverageResult = formerCoverageData.status === 'fulfilled' ? formerCoverageData.value : [];
+      const deliverablesResult = deliverablesData.status === 'fulfilled' ? deliverablesData.value : [];
+      const pipelineIdeasResult = pipelineIdeasData.status === 'fulfilled' ? pipelineIdeasData.value : [];
+
+      setCheckoutHistory(checkoutHistoryResult);
+      setCoverage(activeCoverageResult);
+      setFormerCompanies(formerCoverageResult);
+      setMemos(deliverablesResult.filter(d => d.stage !== 'completed'));
+      setCompletedMemos(deliverablesResult.filter(d => d.stage === 'completed'));
+      setPipelineIdeas(pipelineIdeasResult);
 
       // Calculate user stats from checkout history
-      const { streak: calculatedStreak, weeklyWins: calculatedWeeklyWins } = calculateUserStats(checkoutHistoryData);
-      setStreak(calculatedStreak);
-      setWeeklyWins(calculatedWeeklyWins);
+      const userStats = calculateUserStats(checkoutHistoryData);
+      if (userStats) {
+        setStreak(userStats.streak || 0);
+        setWeeklyWins(userStats.weeklyWins || 0);
+      } else {
+        setStreak(0);
+        setWeeklyWins(0);
+      }
 
       // Get today's goals
       const todayGoals = getTodayGoals();
