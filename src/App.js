@@ -312,6 +312,7 @@ const AnalystOS = () => {
   const loadDataFromSupabase = async () => {
     try {
       setLoading(true);
+      console.log('Starting loadDataFromSupabase...');
       const [
         checkoutHistoryData,
         activeCoverageData,
@@ -326,6 +327,14 @@ const AnalystOS = () => {
         pipelineServices.getPipelineIdeas()
       ]);
 
+      console.log('Promise.allSettled results:', {
+        checkoutHistoryData,
+        activeCoverageData,
+        formerCoverageData,
+        deliverablesData,
+        pipelineIdeasData
+      });
+
       // Handle results safely
       const checkoutHistoryResult = checkoutHistoryData.status === 'fulfilled' ? checkoutHistoryData.value : [];
       const activeCoverageResult = activeCoverageData.status === 'fulfilled' ? activeCoverageData.value : [];
@@ -333,9 +342,13 @@ const AnalystOS = () => {
       const deliverablesResult = deliverablesData.status === 'fulfilled' ? deliverablesData.value : [];
       const pipelineIdeasResult = pipelineIdeasData.status === 'fulfilled' ? pipelineIdeasData.value : [];
 
-      console.log('checkoutHistoryResult:', checkoutHistoryResult);
-      console.log('Type of checkoutHistoryResult:', typeof checkoutHistoryResult);
-      console.log('Is Array:', Array.isArray(checkoutHistoryResult));
+      console.log('Processed results:', {
+        checkoutHistoryResult,
+        activeCoverageResult,
+        formerCoverageResult,
+        deliverablesResult,
+        pipelineIdeasResult
+      });
 
       setCheckoutHistory(checkoutHistoryResult);
       setCoverage(activeCoverageResult);

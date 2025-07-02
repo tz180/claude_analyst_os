@@ -189,24 +189,30 @@ export const coverageServices = {
 
   // Add new company to coverage
   async addCompany(companyData) {
-    const userId = await getCurrentUserId();
-    if (!userId) return { success: false, error: 'User not authenticated' };
+    try {
+      console.log('Adding company to coverage:', companyData);
+      const userId = await getCurrentUserId();
+      if (!userId) return { success: false, error: 'User not authenticated' };
 
-    const { data, error } = await supabase
-      .from('coverage_universe')
-      .insert({
-        user_id: userId,
-        ticker: companyData.ticker,
-        company_name: companyData.company,
-        sector: companyData.sector,
-        status: 'active'
-      });
-    
-    if (error) {
+      const { data, error } = await supabase
+        .from('coverage_universe')
+        .insert({
+          user_id: userId,
+          ticker: companyData.ticker,
+          company_name: companyData.company,
+          sector: companyData.sector,
+          status: 'active'
+        })
+        .select();
+      
+      console.log('Coverage insert result:', { data, error });
+      
+      if (error) throw error;
+      return { success: true, data: data[0] };
+    } catch (error) {
       console.error('Error adding company:', error);
       return { success: false, error };
     }
-    return { success: true, data };
   },
 
   // Update last model date
@@ -294,32 +300,42 @@ export const deliverablesServices = {
 
   // Add new deliverable
   async addDeliverable(deliverableData) {
-    // Convert priority string to integer
-    const priorityMap = {
-      'Low': 3,
-      'Medium': 2,
-      'High': 1
-    };
-    
-    const priority = priorityMap[deliverableData.priority] || 3;
-    
-    const { data, error } = await supabase
-      .from('deliverables')
-      .insert({
-        title: deliverableData.title,
-        type: deliverableData.type,
-        stage: deliverableData.stage || 'started',
-        priority: priority,
-        ticker: deliverableData.ticker,
-        company_name: deliverableData.company,
-        notes: deliverableData.notes
-      });
-    
-    if (error) {
+    try {
+      console.log('Adding deliverable:', deliverableData);
+      const userId = await getCurrentUserId();
+      if (!userId) return { success: false, error: 'User not authenticated' };
+
+      // Convert priority string to integer
+      const priorityMap = {
+        'Low': 3,
+        'Medium': 2,
+        'High': 1
+      };
+      
+      const priority = priorityMap[deliverableData.priority] || 3;
+      
+      const { data, error } = await supabase
+        .from('deliverables')
+        .insert({
+          user_id: userId,
+          title: deliverableData.title,
+          type: deliverableData.type,
+          stage: deliverableData.stage || 'started',
+          priority: priority,
+          ticker: deliverableData.ticker,
+          company_name: deliverableData.company,
+          notes: deliverableData.notes
+        })
+        .select();
+      
+      console.log('Deliverable insert result:', { data, error });
+      
+      if (error) throw error;
+      return { success: true, data: data[0] };
+    } catch (error) {
       console.error('Error adding deliverable:', error);
       return { success: false, error };
     }
-    return { success: true, data };
   },
 
   // Update deliverable stage
@@ -389,24 +405,34 @@ export const pipelineServices = {
 
   // Add new pipeline idea
   async addPipelineIdea(ideaData) {
-    const { data, error } = await supabase
-      .from('pipeline_ideas')
-      .insert({
-        company_name: ideaData.company,
-        ticker: ideaData.ticker,
-        idea_type: ideaData.type || 'general',
-        thesis: ideaData.thesis,
-        catalyst: ideaData.catalyst,
-        target_price: ideaData.targetPrice,
-        status: ideaData.status || 'active',
-        priority: ideaData.priority || 3
-      });
-    
-    if (error) {
+    try {
+      console.log('Adding pipeline idea:', ideaData);
+      const userId = await getCurrentUserId();
+      if (!userId) return { success: false, error: 'User not authenticated' };
+
+      const { data, error } = await supabase
+        .from('pipeline_ideas')
+        .insert({
+          user_id: userId,
+          company_name: ideaData.company,
+          ticker: ideaData.ticker,
+          idea_type: ideaData.type || 'general',
+          thesis: ideaData.thesis,
+          catalyst: ideaData.catalyst,
+          target_price: ideaData.targetPrice,
+          status: ideaData.status || 'active',
+          priority: ideaData.priority || 3
+        })
+        .select();
+      
+      console.log('Pipeline idea insert result:', { data, error });
+      
+      if (error) throw error;
+      return { success: true, data: data[0] };
+    } catch (error) {
       console.error('Error adding pipeline idea:', error);
       return { success: false, error };
     }
-    return { success: true, data };
   },
 
   // Update pipeline idea status
