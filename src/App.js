@@ -276,6 +276,9 @@ const AnalystOS = () => {
   const [coverageSearch, setCoverageSearch] = useState('');
   const [coverageFilter, setCoverageFilter] = useState('all'); // all, active, former
 
+  // Add company error state
+  const [addCompanyError, setAddCompanyError] = useState('');
+
   // Load data from Supabase on component mount
   useEffect(() => {
     if (user) {
@@ -576,6 +579,7 @@ const AnalystOS = () => {
   };
 
   const addCompany = async () => {
+    console.log('addCompany called');
     if (newCompanyName.trim()) {
       const result = await coverageServices.addCompany({
         company: newCompanyName.trim(),
@@ -588,8 +592,10 @@ const AnalystOS = () => {
         setNewCompanyTicker('');
         setNewCompanySector('');
         setShowAddCompanyModal(false);
+        setAddCompanyError('');
         await loadDataFromSupabase(); // Refresh data
       } else {
+        setAddCompanyError(result.error.message || 'Unknown error');
         alert('Error adding company: ' + result.error.message);
       }
     }
@@ -1199,9 +1205,13 @@ const AnalystOS = () => {
             {/* Add Company Modal */}
             {showAddCompanyModal && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                {console.log('Rendering Add Company Modal')}
                 <div className="bg-white rounded-lg p-6 w-96">
                   <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage</h3>
                   <div className="space-y-4">
+                    {addCompanyError && (
+                      <div className="text-red-600 text-sm mb-2">{addCompanyError}</div>
+                    )}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Company Name
