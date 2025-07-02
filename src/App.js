@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, Target, BookOpen, CheckCircle, Plus, Clock, Award, LogOut, User } from 'lucide-react';
+import { Target, CheckCircle, Plus, Award, LogOut, User } from 'lucide-react';
 import './App.css';
 import { 
   dailyCheckinServices, 
   coverageServices, 
   deliverablesServices, 
-  pipelineServices 
+  pipelineServices,
+  analyticsServices 
 } from './supabaseServices';
 import { AuthProvider, useAuth } from './AuthContext';
 import Login from './components/Login';
+import { 
+  PipelineVelocityCard, 
+  CoverageActivityCard, 
+  ProductivityMetricsCard, 
+  QuickStatsCard 
+} from './components/Analytics';
 
 // ✅ MOVE TEXT INPUT COMPONENTS OUTSIDE - This prevents recreation
 const DisciplineEngine = ({ 
@@ -180,72 +187,97 @@ const DisciplineEngine = ({
       </div>
 
       {/* Daily Goals History */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
+    <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold mb-4">Daily Goals History</h3>
-        <div className="space-y-4">
+      <div className="space-y-4">
           {(() => {
             return goalsHistory.length > 0 ? (
               goalsHistory.map((entry, index) => (
                 <div key={index} className={`border rounded-lg p-4 ${entry.completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <span className="font-medium text-gray-900">{entry.date}</span>
                         {entry.completed && (
                           <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
                             Completed
-                          </span>
-                        )}
-                      </div>
+                    </span>
+                  )}
+                </div>
                       <p className={`text-sm leading-relaxed ${entry.completed ? 'text-green-700 line-through' : 'text-gray-700'}`}>
                         {entry.goals}
                       </p>
-                    </div>
+              </div>
                     {!entry.completed && (
-                      <button
+                <button 
                         onClick={() => onMarkGoalsCompleted(entry.date)}
                         className="ml-4 bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors flex items-center">
                         <CheckCircle size={14} className="mr-1" />
                         Mark Complete
-                      </button>
+                </button>
                     )}
-                  </div>
-                </div>
+              </div>
+            </div>
               ))
             ) : (
               <div className="text-center py-8 text-gray-500">
                 <p>No daily goals history yet.</p>
                 <p className="text-sm mt-1">Set your first daily goals to start tracking!</p>
-              </div>
+          </div>
             );
           })()}
-        </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 const AnalystOS = () => {
+  const { user } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
+  const [loading, setLoading] = useState(false);
   const [dailyGoals, setDailyGoals] = useState('');
   const [checkoutReflection, setCheckoutReflection] = useState('');
-  const [disciplineRating, setDisciplineRating] = useState(5);
+  const [disciplineRating, setDisciplineRating] = useState(0);
   const [streak, setStreak] = useState(0);
   const [weeklyWins, setWeeklyWins] = useState(0);
-
-  // Data states - will be loaded from Supabase
+  const [checkoutHistory, setCheckoutHistory] = useState([]);
   const [coverage, setCoverage] = useState([]);
   const [formerCompanies, setFormerCompanies] = useState([]);
-  const [pipelineIdeas, setPipelineIdeas] = useState([]);
   const [memos, setMemos] = useState([]);
   const [completedMemos, setCompletedMemos] = useState([]);
-  const [checkoutHistory, setCheckoutHistory] = useState([]);
-  const [goalsHistory, setGoalsHistory] = useState([]);
+  const [pipelineIdeas, setPipelineIdeas] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+
+  // Pipeline states
+  const [newIdeaCompany, setNewIdeaCompany] = useState('');
+  const [newIdeaTicker, setNewIdeaTicker] = useState('');
+  const [showAddIdeaModal, setShowAddIdeaModal] = useState(false);
+  const [passingIdeaId, setPassingIdeaId] = useState(null);
+  const [passReason, setPassReason] = useState('');
+  const [showPassModal, setShowPassModal] = useState(false);
+
+  // Memo/Model states
+  const [newMemoTitle, setNewMemoTitle] = useState('');
+  const [newMemoType, setNewMemoType] = useState('memo');
+  const [newMemoPriority, setNewMemoPriority] = useState('Medium');
+  const [showAddMemoModal, setShowAddMemoModal] = useState(false);
+
+  // Coverage states
+  const [removingCompanyId, setRemovingCompanyId] = useState(null);
+  const [removeReason, setRemoveReason] = useState('');
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
+  const [coverageSearch, setCoverageSearch] = useState('');
+  const [coverageFilter, setCoverageFilter] = useState('all'); // all, active, former
 
   // Load data from Supabase on component mount
   useEffect(() => {
-    loadDataFromSupabase();
-  }, []);
+    if (user) {
+      loadDataFromSupabase();
+    }
+  }, [user]);
 
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
@@ -283,68 +315,57 @@ const AnalystOS = () => {
 
   const loadDataFromSupabase = async () => {
     try {
-      // Load coverage data
-      const activeCoverage = await coverageServices.getActiveCoverage();
-      const formerCoverage = await coverageServices.getFormerCoverage();
-      setCoverage(activeCoverage);
-      setFormerCompanies(formerCoverage);
+      setLoading(true);
+      const [
+        checkoutHistoryData,
+        activeCoverageData,
+        formerCoverageData,
+        deliverablesData,
+        pipelineIdeasData
+      ] = await Promise.all([
+        dailyCheckinServices.getCheckoutHistory(),
+        coverageServices.getActiveCoverage(),
+        coverageServices.getFormerCoverage(),
+        deliverablesServices.getDeliverables(),
+        pipelineServices.getPipelineIdeas()
+      ]);
 
-      // Load pipeline ideas
-      const pipelineData = await pipelineServices.getPipelineIdeas();
-      setPipelineIdeas(pipelineData);
+      setCheckoutHistory(checkoutHistoryData);
+      setCoverage(activeCoverageData);
+      setFormerCompanies(formerCoverageData);
+      setMemos(deliverablesData.filter(d => d.stage !== 'completed'));
+      setCompletedMemos(deliverablesData.filter(d => d.stage === 'completed'));
+      setPipelineIdeas(pipelineIdeasData);
 
-      // Load deliverables
-      const deliverablesData = await deliverablesServices.getDeliverables();
-      const activeDeliverables = deliverablesData.filter(d => d.stage !== 'completed');
-      const completedDeliverables = deliverablesData.filter(d => d.stage === 'completed');
-      setMemos(activeDeliverables);
-      setCompletedMemos(completedDeliverables);
+      // Calculate user stats from checkout history
+      const { streak: calculatedStreak, weeklyWins: calculatedWeeklyWins } = calculateUserStats(checkoutHistoryData);
+      setStreak(calculatedStreak);
+      setWeeklyWins(calculatedWeeklyWins);
 
-      // Load daily check-in data
-      const checkoutData = await dailyCheckinServices.getCheckoutHistory();
-      const goalsData = await dailyCheckinServices.getGoalsHistory();
-      setCheckoutHistory(checkoutData);
-      setGoalsHistory(goalsData);
+      // Get today's goals
+      const todayGoals = getTodayGoals();
+      setDailyGoals(todayGoals);
 
-      // Load today's goals
-      const todayCheckin = await dailyCheckinServices.getTodayCheckin();
-      if (todayCheckin && todayCheckin.goals) {
-        setDailyGoals(Array.isArray(todayCheckin.goals) ? todayCheckin.goals.join('\n') : todayCheckin.goals);
-      }
+      // Refresh analytics after data loads
+      await loadAnalyticsData();
 
-      // Calculate streak and weekly wins
-      calculateUserStats(checkoutData);
     } catch (error) {
-      console.error('Error loading data from Supabase:', error);
+      console.error('Error loading data:', error);
+      addNotification('Failed to load data: ' + error.message, 'error');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // Modal states
-  const [showAddIdeaModal, setShowAddIdeaModal] = useState(false);
-  const [showAddMemoModal, setShowAddMemoModal] = useState(false);
-  const [showPassModal, setShowPassModal] = useState(false);
-  const [showRemoveModal, setShowRemoveModal] = useState(false);
-  const [newIdeaCompany, setNewIdeaCompany] = useState('');
-  const [newIdeaTicker, setNewIdeaTicker] = useState('');
-  const [newMemoTitle, setNewMemoTitle] = useState('');
-  const [newMemoType, setNewMemoType] = useState('Memo');
-  const [newMemoPriority, setNewMemoPriority] = useState('Medium');
-  const [passingIdeaId, setPassingIdeaId] = useState(null);
-  const [passReason, setPassReason] = useState('Not a Fit');
-  const [removingCompanyId, setRemovingCompanyId] = useState(null);
-  const [removeReason, setRemoveReason] = useState('Not a fit');
-  const [historyRefresh, setHistoryRefresh] = useState(0);
-  const [goalsRefresh, setGoalsRefresh] = useState(0);
-  const [notifications, setNotifications] = useState([]);
-  const [coverageSearch, setCoverageSearch] = useState('');
-  const [coverageFilter, setCoverageFilter] = useState('all'); // all, active, former
-  const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
-  const [newCompanyTicker, setNewCompanyTicker] = useState('');
-  const [newCompanyName, setNewCompanyName] = useState('');
-  const [newCompanySector, setNewCompanySector] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const loadAnalyticsData = async () => {
+    try {
+      const analyticsData = await analyticsServices.getDashboardAnalytics();
+      setAnalytics(analyticsData);
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+      addNotification('Failed to load analytics: ' + error.message, 'error');
+    }
+  };
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -389,9 +410,9 @@ const AnalystOS = () => {
       });
       
       if (result.success) {
-        setNewIdeaCompany('');
+      setNewIdeaCompany('');
         setNewIdeaTicker('');
-        setShowAddIdeaModal(false);
+      setShowAddIdeaModal(false);
         await loadDataFromSupabase(); // Refresh data
       } else {
         alert('Error adding pipeline idea: ' + result.error.message);
@@ -426,9 +447,9 @@ const AnalystOS = () => {
     if (passingIdeaId) {
       const result = await pipelineServices.updatePipelineStatus(passingIdeaId, 'Passed');
       if (result.success) {
-        setShowPassModal(false);
-        setPassingIdeaId(null);
-        setPassReason('Not a Fit');
+      setShowPassModal(false);
+      setPassingIdeaId(null);
+      setPassReason('Not a Fit');
         await loadDataFromSupabase(); // Refresh data
       } else {
         console.error('Error passing idea:', result.error);
@@ -476,25 +497,14 @@ const AnalystOS = () => {
   };
 
   const cancelAddIdea = () => {
-    setShowAddIdeaModal(false);
     setNewIdeaCompany('');
     setNewIdeaTicker('');
-  };
-
-  // Quick action handlers for dashboard
-  const handleQuickAddPipelineIdea = () => {
-    setCurrentView('pipeline');
-    setShowAddIdeaModal(true);
-  };
-
-  const handleQuickCreateMemo = () => {
-    setCurrentView('memos');
-    setShowAddMemoModal(true);
+    setShowAddIdeaModal(false);
   };
 
   const cancelAddMemo = () => {
-    setShowAddMemoModal(false);
     setNewMemoTitle('');
+    setShowAddMemoModal(false);
   };
 
   // Get checkout history from localStorage
@@ -504,12 +514,13 @@ const AnalystOS = () => {
 
   // Get today's daily goals from localStorage
   const getTodayGoals = () => {
-    return dailyGoals;
+    const todayEntry = checkoutHistory.find(entry => entry.date === new Date().toLocaleDateString());
+    return todayEntry ? todayEntry.goals : '';
   };
 
   // Get daily goals history from localStorage
   const getGoalsHistory = () => {
-    return goalsHistory;
+    return checkoutHistory;
   };
 
   const completeDailyCheckin = async () => {
@@ -523,9 +534,8 @@ const AnalystOS = () => {
       
       if (result.success) {
         setDailyGoals('');
-        setGoalsRefresh(prev => prev + 1);
         await loadDataFromSupabase(); // Refresh data
-        alert('Daily goals set! Stay focused and crush your deliverables.');
+      alert('Daily goals set! Stay focused and crush your deliverables.');
       } else {
         alert('Error saving goals: ' + result.error.message);
       }
@@ -536,9 +546,8 @@ const AnalystOS = () => {
   const markGoalsCompleted = async (date) => {
     const result = await dailyCheckinServices.markGoalsCompleted(date);
     if (result.success) {
-      setGoalsRefresh(prev => prev + 1);
       await loadDataFromSupabase(); // Refresh data
-    } else {
+      } else {
       console.error('Error marking goals as completed:', result.error);
     }
   };
@@ -554,11 +563,10 @@ const AnalystOS = () => {
       
       if (result.success) {
         // Clear form
-        setCheckoutReflection('');
-        setDisciplineRating(5);
-        
+      setCheckoutReflection('');
+      setDisciplineRating(5);
+      
         // Force re-render of history and recalculate stats
-        setHistoryRefresh(prev => prev + 1);
         await loadDataFromSupabase(); // This will recalculate streak and weekly wins
         
         alert(`Day completed! ${disciplineRating >= 3 ? 'Great job!' : 'Focus better tomorrow.'}`);
@@ -573,25 +581,15 @@ const AnalystOS = () => {
     if (!dateString || dateString === 'Never' || dateString === 'TBD') return Infinity;
     
     try {
-      const date = new Date(dateString);
+    const date = new Date(dateString);
       if (isNaN(date.getTime())) return Infinity; // Invalid date
       
-      const today = new Date();
-      const diffTime = Math.abs(today - date);
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const today = new Date();
+    const diffTime = Math.abs(today - date);
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     } catch (error) {
       console.error('Error calculating days ago for:', dateString, error);
       return Infinity;
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Active': return 'bg-green-100 text-green-800';
-      case 'Pipeline': return 'bg-yellow-100 text-yellow-800';
-      case 'Dropped': return 'bg-red-100 text-red-800';
-      case 'Former': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -617,7 +615,7 @@ const AnalystOS = () => {
             <div className="flex items-center space-x-8">
               <h1 className="text-xl font-semibold text-gray-900">Analyst OS</h1>
               <div className="flex space-x-1">
-                <button
+            <button
                   onClick={() => setCurrentView('dashboard')}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     currentView === 'dashboard'
@@ -626,7 +624,7 @@ const AnalystOS = () => {
                   }`}
                 >
                   Dashboard
-                </button>
+            </button>
                 <button
                   onClick={() => setCurrentView('coverage')}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -667,8 +665,8 @@ const AnalystOS = () => {
                 >
                   Daily Check-in
                 </button>
-              </div>
-            </div>
+        </div>
+      </div>
 
             {/* User Menu */}
             <div className="relative">
@@ -678,7 +676,7 @@ const AnalystOS = () => {
               >
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                   <User className="w-4 h-4 text-white" />
-                </div>
+            </div>
                 <span className="text-sm font-medium">
                   {user?.email?.split('@')[0] || 'User'}
                 </span>
@@ -689,7 +687,7 @@ const AnalystOS = () => {
                   <div className="px-4 py-2 text-sm text-gray-700 border-b">
                     <div className="font-medium">{user?.email}</div>
                     <div className="text-gray-500">Signed in</div>
-                  </div>
+            </div>
                   <button
                     onClick={async () => {
                       await signOut();
@@ -700,7 +698,7 @@ const AnalystOS = () => {
                     <LogOut className="w-4 h-4" />
                     <span>Sign out</span>
                   </button>
-                </div>
+            </div>
               )}
             </div>
           </div>
@@ -711,133 +709,103 @@ const AnalystOS = () => {
 
   // ✅ Simple Dashboard - no text inputs so can stay internal
   const Dashboard = () => {
-    const todayGoals = getTodayGoals();
-    
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4 flex items-center">
-              <Calendar className="mr-2" size={20} />
-              Today's Plan
-            </h3>
-            <div className="space-y-3">
-              {todayGoals ? (
-                <div className="bg-blue-50 p-3 rounded">
-                  <p className="font-medium text-blue-900">Today's Goals</p>
-                  <p className="text-blue-700 text-sm whitespace-pre-wrap">{todayGoals}</p>
+        {/* Today's Plan Section */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <Target className="mr-2" size={20} />
+            Today's Plan
+          </h3>
+          {dailyGoals ? (
+            <div className="space-y-2">
+              {dailyGoals.split('\n').map((goal, index) => (
+                <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
+                  <span className="text-gray-700">{goal}</span>
                 </div>
-              ) : (
-                <div className="bg-gray-50 p-3 rounded">
-                  <p className="font-medium text-gray-900">No goals set yet</p>
-                  <p className="text-gray-700 text-sm">Complete your morning check-in to set today's goals</p>
-                  <button 
-                    onClick={() => setCurrentView('discipline')}
-                    className="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors">
-                    Set Goals Now
-                  </button>
-                </div>
-              )}
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No daily goals set yet.</p>
+              <p className="text-sm mt-1">Set your goals in the Daily Check-in section!</p>
+              <button 
+                onClick={() => setCurrentView('discipline')}
+                className="mt-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                Start Daily Check-in
+              </button>
+            </div>
+          )}
+        </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4 flex items-center">
-              <Target className="mr-2" size={20} />
-              Week Goals
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span>Models Updated</span>
-                <span className="font-bold text-green-600">3/4</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Memos Sent</span>
-                <span className="font-bold text-blue-600">2/3</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{width: '75%'}}></div>
-              </div>
-            </div>
-          </div>
+        {/* Analytics Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <QuickStatsCard analytics={analytics} />
+          <PipelineVelocityCard pipelineVelocity={analytics?.pipelineVelocity} />
+        </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4 flex items-center">
-              <Award className="mr-2" size={20} />
-              Momentum Tracker
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span>Current Streak</span>
-                <span className="font-bold text-orange-600">{streak} days</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>This Week's Wins</span>
-                <span className="font-bold text-green-600">{weeklyWins}</span>
-              </div>
-              {checkoutHistory.length === 0 ? (
-                <div className="text-sm text-gray-500">
-                  Start your daily check-ins to build momentum!
-                </div>
-              ) : (
-                <div className="text-sm text-gray-600">
-                  Last shipped: {checkoutHistory[0]?.date || 'No recent activity'}
-                </div>
-              )}
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <CoverageActivityCard coverageActivity={analytics?.coverageActivity} />
+          <ProductivityMetricsCard productivityMetrics={analytics?.productivityMetrics} />
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button 
+              onClick={() => setCurrentView('discipline')}
+              className="p-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+              Start Daily Check-in
+            </button>
+            <button 
+              onClick={() => setCurrentView('pipeline')}
+              className="p-3 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
+              Add Pipeline Idea
+            </button>
+            <button 
+              onClick={() => setCurrentView('memos')}
+              className="p-3 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
+              Create Memo/Model
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-            <div className="space-y-2">
-              <button 
-                onClick={() => setCurrentView('discipline')}
-                className="w-full p-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-                Start Daily Check-in
-              </button>
-              <button 
-                onClick={handleQuickAddPipelineIdea}
-                className="w-full p-3 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
-                Add New Pipeline Idea
-              </button>
-              <button 
-                onClick={handleQuickCreateMemo}
-                className="w-full p-3 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
-                Create New Memo/Model
-              </button>
-              <button 
-                onClick={async () => {
-                  try {
-                    const data = {
-                      dailyCheckins: await dailyCheckinServices.getCheckoutHistory(),
-                      coverage: await coverageServices.getActiveCoverage(),
-                      formerCoverage: await coverageServices.getFormerCoverage(),
-                      deliverables: await deliverablesServices.getDeliverables(),
-                      pipelineIdeas: await pipelineServices.getPipelineIdeas(),
-                      exportDate: new Date().toISOString()
-                    };
-                    
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `analyst-os-backup-${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    addNotification('Data exported successfully!', 'success');
-                  } catch (error) {
-                    addNotification('Export failed: ' + error.message, 'error');
-                  }
-                }}
-                className="w-full p-3 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
-                Export Data
-              </button>
-            </div>
+        {/* Data Management */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4">Data Management</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button 
+              onClick={async () => {
+                try {
+                  const data = {
+                    dailyCheckins: await dailyCheckinServices.getCheckoutHistory(),
+                    coverage: await coverageServices.getActiveCoverage(),
+                    formerCoverage: await coverageServices.getFormerCoverage(),
+                    deliverables: await deliverablesServices.getDeliverables(),
+                    pipelineIdeas: await pipelineServices.getPipelineIdeas(),
+                    exportDate: new Date().toISOString()
+                  };
+                  
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `analyst-os-backup-${new Date().toISOString().split('T')[0]}.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  
+                  addNotification('Data exported successfully!', 'success');
+                } catch (error) {
+                  addNotification('Export failed: ' + error.message, 'error');
+                }
+              }}
+              className="w-full p-3 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
+              Export Data
+            </button>
           </div>
         </div>
       </div>
@@ -848,7 +816,7 @@ const AnalystOS = () => {
   const renderCurrentView = () => {
     switch(currentView) {
       case 'dashboard': 
-        return <Dashboard key={goalsRefresh} />;
+        return <Dashboard />;
       case 'pipeline': 
         return (
           <div className="space-y-6">
@@ -940,7 +908,7 @@ const AnalystOS = () => {
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
-                            <h4 className="font-semibold">{idea.company}</h4>
+                          <h4 className="font-semibold">{idea.company}</h4>
                             {idea.ticker && (
                               <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
                                 {idea.ticker}
@@ -1000,7 +968,7 @@ const AnalystOS = () => {
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
-                            <h4 className="font-semibold">{idea.company}</h4>
+                          <h4 className="font-semibold">{idea.company}</h4>
                             {idea.ticker && (
                               <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
                                 {idea.ticker}
@@ -1142,7 +1110,6 @@ const AnalystOS = () => {
             checkoutHistory={getCheckoutHistory()}
             onMarkGoalsCompleted={markGoalsCompleted}
             goalsHistory={getGoalsHistory()}
-            key={historyRefresh}
           />
         );
       case 'coverage':
@@ -1152,9 +1119,9 @@ const AnalystOS = () => {
             <div className="bg-white p-6 rounded-lg shadow-sm border">
               <div className="flex justify-between items-center mb-4">
                 <div>
-                  <h2 className="text-xl font-semibold">Coverage Universe</h2>
+              <h2 className="text-xl font-semibold">Coverage Universe</h2>
                   <p className="text-gray-600">Manage your active and former coverage</p>
-                </div>
+            </div>
                 <button 
                   onClick={() => setShowAddCompanyModal(true)}
                   className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center">
@@ -1227,12 +1194,12 @@ const AnalystOS = () => {
                               )}
                             </div>
                             <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                              <div>
+                        <div>
                                 <span className="font-medium">Last Model:</span> {company.lastModelDate || 'Never'}
                                 {company.lastModelDate && (
                                   <span className="text-gray-500 ml-1">({getDaysAgo(company.lastModelDate)} days ago)</span>
                                 )}
-                              </div>
+                        </div>
                               <div>
                                 <span className="font-medium">Last Memo:</span> {company.lastMemoDate || 'Never'}
                                 {company.lastMemoDate && (
@@ -1309,17 +1276,17 @@ const AnalystOS = () => {
                                 {company.ticker && (
                                   <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
                                     {company.ticker}
-                                  </span>
+                        </span>
                                 )}
                                 <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">
                                   {company.removalReason}
                                 </span>
-                              </div>
+                        </div>
                               <div className="text-sm text-gray-600">
                                 <div>Removed: {company.removalDate}</div>
                                 <div>Last Model: {company.lastModelDate || 'Never'}</div>
                                 <div>Last Memo: {company.lastMemoDate || 'Never'}</div>
-                              </div>
+                        </div>
                             </div>
                           </div>
                         </div>
@@ -1353,7 +1320,7 @@ const AnalystOS = () => {
                         <option value="Market">Market</option>
                         <option value="Not a fit">Not a fit</option>
                       </select>
-                    </div>
+            </div>
                     <div className="flex space-x-3">
                       <button
                         onClick={() => moveToFormerCoverage(removingCompanyId)}
@@ -1497,8 +1464,8 @@ const AnalystOS = () => {
                             }}
                             className="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-green-600">
                             Complete
-                          </button>
-                          <button 
+                        </button>
+                        <button 
                             onClick={async () => {
                               const result = await deliverablesServices.updateDeliverableStage(memo.id, 'stalled');
                               if (result.success) {
@@ -1509,7 +1476,7 @@ const AnalystOS = () => {
                             }}
                             className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-red-600">
                             Stall
-                          </button>
+                        </button>
                         </div>
                       </div>
                     </div>
@@ -1614,8 +1581,8 @@ const AnalystOS = () => {
                             });
                             
                             if (result.success) {
-                              setNewMemoTitle('');
-                              setShowAddMemoModal(false);
+                            setNewMemoTitle('');
+                            setShowAddMemoModal(false);
                               await loadDataFromSupabase(); // Refresh data
                             } else {
                               alert('Error creating deliverable: ' + result.error.message);
@@ -1706,7 +1673,7 @@ const AnalystOS = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isLoading ? (
+      {loading ? (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -1715,7 +1682,7 @@ const AnalystOS = () => {
         </div>
       ) : (
         <>
-          <Navigation />
+      <Navigation />
           
           {/* Notifications */}
           {notifications.length > 0 && (
@@ -1744,9 +1711,9 @@ const AnalystOS = () => {
             </div>
           )}
           
-          <main className="container mx-auto px-4 py-8">
-            {renderCurrentView()}
-          </main>
+      <main className="container mx-auto px-4 py-8">
+        {renderCurrentView()}
+      </main>
         </>
       )}
     </div>

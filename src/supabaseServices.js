@@ -89,6 +89,8 @@ export const dailyCheckinServices = {
       .upsert({
         ...checkinData,
         user_id: userId
+      }, {
+        onConflict: 'user_id,date'
       });
     
     if (error) {
@@ -409,5 +411,250 @@ export const pipelineServices = {
       return { success: false, error };
     }
     return { success: true };
+  }
+};
+
+// Analytics Services
+export const analyticsServices = {
+  // Calculate pipeline velocity metrics
+  async getPipelineVelocity() {
+    const userId = await getCurrentUserId();
+    if (!userId) return {};
+
+    const { data, error } = await supabase
+      .from('pipeline_ideas')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching pipeline data for analytics:', error);
+      return {};
+    }
+
+    const now = new Date();
+    const pipelineData = data || [];
+    
+    // Calculate velocity by status
+    const velocityByStatus = {
+      'On Deck': { count: 0, avgDays: 0, items: [] },
+      'Core': { count: 0, avgDays: 0, items: [] },
+      'Active': { count: 0, avgDays: 0, items: [] },
+      'Passed': { count: 0, avgDays: 0, items: [] }
+    };
+
+    pipelineData.forEach(item => {
+      const status = item.status || 'On Deck';
+      const daysInPipeline = item.created_at ? 
+        Math.ceil((now - new Date(item.created_at)) / (1000 * 60 * 60 * 24)) : 0;
+      
+      if (velocityByStatus[status]) {
+        velocityByStatus[status].count++;
+        velocityByStatus[status].items.push({
+          company: item.company_name,
+          ticker: item.ticker,
+          days: daysInPipeline,
+          dateAdded: item.created_at
+        });
+      }
+    });
+
+    // Calculate averages
+    Object.keys(velocityByStatus).forEach(status => {
+      const items = velocityByStatus[status].items;
+      if (items.length > 0) {
+        velocityByStatus[status].avgDays = Math.round(
+          items.reduce((sum, item) => sum + item.days, 0) / items.length
+        );
+      }
+    });
+
+    // Calculate overall pipeline health
+    const totalItems = pipelineData.length;
+    const activeItems = velocityByStatus['Active'].count + velocityByStatus['Core'].count;
+    const passedItems = velocityByStatus['Passed'].count;
+    const conversionRate = totalItems > 0 ? Math.round((activeItems / totalItems) * 100) : 0;
+
+    return {
+      velocityByStatus,
+      totalItems,
+      activeItems,
+      passedItems,
+      conversionRate,
+      pipelineHealth: conversionRate >= 30 ? 'Good' : conversionRate >= 15 ? 'Fair' : 'Needs Attention'
+    };
+  },
+
+  // Calculate coverage activity metrics
+  async getCoverageActivity() {
+    const userId = await getCurrentUserId();
+    if (!userId) return {};
+
+    const { data, error } = await supabase
+      .from('coverage_universe')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('last_model_date', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching coverage data for analytics:', error);
+      return {};
+    }
+
+    const now = new Date();
+    const coverageData = data || [];
+    
+    const activityMetrics = {
+      totalCompanies: coverageData.length,
+      recentlyActive: 0, // Last 30 days
+      needsAttention: 0, // No activity in 90+ days
+      avgDaysSinceModel: 0,
+      avgDaysSinceMemo: 0,
+      companiesByActivity: {
+        'Very Active': 0, // Last 7 days
+        'Active': 0,      // Last 30 days
+        'Needs Attention': 0, // 30-90 days
+        'Inactive': 0     // 90+ days
+      }
+    };
+
+    let totalDaysSinceModel = 0;
+    let totalDaysSinceMemo = 0;
+    let modelCount = 0;
+    let memoCount = 0;
+
+    coverageData.forEach(company => {
+      const daysSinceModel = company.last_model_date ? 
+        Math.ceil((now - new Date(company.last_model_date)) / (1000 * 60 * 60 * 24)) : 999;
+      const daysSinceMemo = company.last_memo_date ? 
+        Math.ceil((now - new Date(company.last_memo_date)) / (1000 * 60 * 60 * 24)) : 999;
+
+      if (daysSinceModel < 999) {
+        totalDaysSinceModel += daysSinceModel;
+        modelCount++;
+      }
+      if (daysSinceMemo < 999) {
+        totalDaysSinceMemo += daysSinceMemo;
+        memoCount++;
+      }
+
+      // Categorize by activity level
+      const mostRecent = Math.min(daysSinceModel, daysSinceMemo);
+      if (mostRecent <= 7) {
+        activityMetrics.companiesByActivity['Very Active']++;
+      } else if (mostRecent <= 30) {
+        activityMetrics.companiesByActivity['Active']++;
+        activityMetrics.recentlyActive++;
+      } else if (mostRecent <= 90) {
+        activityMetrics.companiesByActivity['Needs Attention']++;
+      } else {
+        activityMetrics.companiesByActivity['Inactive']++;
+        activityMetrics.needsAttention++;
+      }
+    });
+
+    activityMetrics.avgDaysSinceModel = modelCount > 0 ? Math.round(totalDaysSinceModel / modelCount) : 0;
+    activityMetrics.avgDaysSinceMemo = memoCount > 0 ? Math.round(totalDaysSinceMemo / memoCount) : 0;
+
+    return activityMetrics;
+  },
+
+  // Calculate productivity metrics
+  async getProductivityMetrics() {
+    const userId = await getCurrentUserId();
+    if (!userId) return {};
+
+    const { data, error } = await supabase
+      .from('deliverables')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching deliverables data for analytics:', error);
+      return {};
+    }
+
+    const now = new Date();
+    const deliverablesData = data || [];
+    
+    const productivityMetrics = {
+      totalDeliverables: deliverablesData.length,
+      completed: 0,
+      inProgress: 0,
+      stalled: 0,
+      completionRate: 0,
+      avgDaysToComplete: 0,
+      byType: { memo: 0, model: 0 },
+      byPriority: { High: 0, Medium: 0, Low: 0 },
+      recentActivity: 0, // Last 7 days
+      weeklyTrend: [] // Last 4 weeks
+    };
+
+    let totalDaysToComplete = 0;
+    let completedCount = 0;
+
+    deliverablesData.forEach(item => {
+      // Count by status
+      if (item.stage === 'completed') {
+        productivityMetrics.completed++;
+        if (item.completed_date && item.created_at) {
+          const daysToComplete = Math.ceil(
+            (new Date(item.completed_date) - new Date(item.created_at)) / (1000 * 60 * 60 * 24)
+          );
+          totalDaysToComplete += daysToComplete;
+          completedCount++;
+        }
+      } else if (item.stage === 'stalled') {
+        productivityMetrics.stalled++;
+      } else {
+        productivityMetrics.inProgress++;
+      }
+
+      // Count by type
+      if (item.type === 'memo') {
+        productivityMetrics.byType.memo++;
+      } else if (item.type === 'model') {
+        productivityMetrics.byType.model++;
+      }
+
+      // Count by priority
+      const priority = item.priority || 'Medium';
+      if (productivityMetrics.byPriority[priority]) {
+        productivityMetrics.byPriority[priority]++;
+      }
+
+      // Check recent activity
+      if (item.created_at) {
+        const daysSinceCreated = Math.ceil((now - new Date(item.created_at)) / (1000 * 60 * 60 * 24));
+        if (daysSinceCreated <= 7) {
+          productivityMetrics.recentActivity++;
+        }
+      }
+    });
+
+    productivityMetrics.completionRate = productivityMetrics.totalDeliverables > 0 ? 
+      Math.round((productivityMetrics.completed / productivityMetrics.totalDeliverables) * 100) : 0;
+    productivityMetrics.avgDaysToComplete = completedCount > 0 ? 
+      Math.round(totalDaysToComplete / completedCount) : 0;
+
+    return productivityMetrics;
+  },
+
+  // Get comprehensive dashboard analytics
+  async getDashboardAnalytics() {
+    const [pipelineVelocity, coverageActivity, productivityMetrics] = await Promise.all([
+      this.getPipelineVelocity(),
+      this.getCoverageActivity(),
+      this.getProductivityMetrics()
+    ]);
+
+    return {
+      pipelineVelocity,
+      coverageActivity,
+      productivityMetrics,
+      timestamp: new Date().toISOString()
+    };
   }
 }; 
