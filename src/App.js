@@ -270,6 +270,9 @@ const AnalystOS = () => {
   const [removeReason, setRemoveReason] = useState('');
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyTicker, setNewCompanyTicker] = useState('');
+  const [newCompanySector, setNewCompanySector] = useState('');
   const [coverageSearch, setCoverageSearch] = useState('');
   const [coverageFilter, setCoverageFilter] = useState('all'); // all, active, former
 
@@ -393,9 +396,11 @@ const AnalystOS = () => {
         setWeeklyWins(0);
       }
 
-      // Get today's goals
-      const todayGoals = getTodayGoals();
-      setDailyGoals(todayGoals);
+      // Get today's goals only if dailyGoals is empty (don't override user input)
+      if (!dailyGoals.trim()) {
+        const todayGoals = getTodayGoals();
+        setDailyGoals(todayGoals);
+      }
 
       // Refresh analytics after data loads
       await loadAnalyticsData();
@@ -449,6 +454,18 @@ const AnalystOS = () => {
 
   const handleRemoveReasonChange = (e) => {
     setRemoveReason(e.target.value);
+  };
+
+  const handleNewCompanyNameChange = (e) => {
+    setNewCompanyName(e.target.value);
+  };
+
+  const handleNewCompanyTickerChange = (e) => {
+    setNewCompanyTicker(e.target.value);
+  };
+
+  const handleNewCompanySectorChange = (e) => {
+    setNewCompanySector(e.target.value);
   };
 
   // Other functions
@@ -558,6 +575,33 @@ const AnalystOS = () => {
     setShowAddMemoModal(false);
   };
 
+  const addCompany = async () => {
+    if (newCompanyName.trim()) {
+      const result = await coverageServices.addCompany({
+        company: newCompanyName.trim(),
+        ticker: newCompanyTicker.trim(),
+        sector: newCompanySector.trim() || 'TBD'
+      });
+      
+      if (result.success) {
+        setNewCompanyName('');
+        setNewCompanyTicker('');
+        setNewCompanySector('');
+        setShowAddCompanyModal(false);
+        await loadDataFromSupabase(); // Refresh data
+      } else {
+        alert('Error adding company: ' + result.error.message);
+      }
+    }
+  };
+
+  const cancelAddCompany = () => {
+    setNewCompanyName('');
+    setNewCompanyTicker('');
+    setNewCompanySector('');
+    setShowAddCompanyModal(false);
+  };
+
   // Get checkout history from localStorage
   const getCheckoutHistory = () => {
     return checkoutHistory;
@@ -592,9 +636,9 @@ const AnalystOS = () => {
       });
       
       if (result.success) {
-        setDailyGoals('');
-        await loadDataFromSupabase(); // Refresh data
-      alert('Daily goals set! Stay focused and crush your deliverables.');
+        setDailyGoals(''); // Clear the input
+        await loadDataFromSupabase(); // Refresh data but don't reload goals into input
+        alert('Daily goals set! Stay focused and crush your deliverables.');
       } else {
         alert('Error saving goals: ' + result.error.message);
       }
@@ -1142,6 +1186,70 @@ const AnalystOS = () => {
                       </button>
                       <button
                         onClick={cancelPass}
+                        className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Add Company Modal */}
+            {showAddCompanyModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-96">
+                  <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Company Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompanyName}
+                        onChange={handleNewCompanyNameChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., Apple Inc."
+                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ticker
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompanyTicker}
+                        onChange={handleNewCompanyTickerChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., AAPL"
+                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Sector
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompanySector}
+                        onChange={handleNewCompanySectorChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., Technology"
+                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={addCompany}
+                        className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
+                      >
+                        Add to Coverage
+                      </button>
+                      <button
+                        onClick={cancelAddCompany}
                         className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors"
                       >
                         Cancel
@@ -1788,7 +1896,7 @@ const AppWithAuth = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Loading Analyst OS...</p>
         </div>
       </div>
     );
