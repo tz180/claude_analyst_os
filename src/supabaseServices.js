@@ -2,8 +2,17 @@ import { supabase } from './supabase';
 
 // Get current user ID from Supabase auth
 const getCurrentUserId = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('Error getting user:', error);
+      return null;
+    }
+    return data?.user?.id || null;
+  } catch (error) {
+    console.error('Error in getCurrentUserId:', error);
+    return null;
+  }
 };
 
 // Temporary: Remove user_id requirement for development
