@@ -282,9 +282,7 @@ const AnalystOS = () => {
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
     if (!checkoutHistory || checkoutHistory.length === 0) {
-      setStreak(0);
-      setWeeklyWins(0);
-      return;
+      return { streak: 0, weeklyWins: 0 };
     }
 
     // Calculate current streak
@@ -305,12 +303,11 @@ const AnalystOS = () => {
       }
     }
     
-    setStreak(currentStreak);
-    
     // Calculate weekly wins (last 7 days with rating >= 3)
     const lastWeek = sortedHistory.slice(0, 7);
     const weeklyWinsCount = lastWeek.filter(entry => entry.rating >= 3).length;
-    setWeeklyWins(weeklyWinsCount);
+    
+    return { streak: currentStreak, weeklyWins: weeklyWinsCount };
   };
 
   const loadDataFromSupabase = async () => {
