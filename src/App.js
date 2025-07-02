@@ -1453,13 +1453,11 @@ const AnalystOS = () => {
               </div>
             )}
 
-            {/* Add Company Modal - COVERAGE PAGE */}
-            {console.log('Coverage page - showAddCompanyModal state:', showAddCompanyModal)}
+            {/* Add Company Modal */}
             {showAddCompanyModal && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                {console.log('Rendering Add Company Modal in Coverage page')}
-                <div className="bg-white rounded-lg p-6 w-96" style={{border: '3px solid red'}}>
-                  <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage (COVERAGE PAGE)</h3>
+                <div className="bg-white rounded-lg p-6 w-96">
+                  <h3 className="text-lg font-semibold mb-4">Add New Company to Coverage</h3>
                   <div className="space-y-4">
                     {addCompanyError && (
                       <div className="text-red-600 text-sm mb-2">{addCompanyError}</div>
