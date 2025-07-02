@@ -532,6 +532,15 @@ const AnalystOS = () => {
 
   // Get today's daily goals from localStorage
   const getTodayGoals = () => {
+    console.log('getTodayGoals called with checkoutHistory:', checkoutHistory);
+    console.log('Type of checkoutHistory in getTodayGoals:', typeof checkoutHistory);
+    console.log('Is Array in getTodayGoals:', Array.isArray(checkoutHistory));
+    
+    if (!checkoutHistory || !Array.isArray(checkoutHistory)) {
+      console.log('checkoutHistory is not an array in getTodayGoals, returning empty string');
+      return '';
+    }
+    
     const todayEntry = checkoutHistory.find(entry => entry.date === new Date().toLocaleDateString());
     return todayEntry ? todayEntry.goals : '';
   };
