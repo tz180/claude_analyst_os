@@ -281,37 +281,31 @@ const AnalystOS = () => {
 
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
-    console.log('calculateUserStats called with:', checkoutHistory);
-    console.log('Type of checkoutHistory:', typeof checkoutHistory);
-    console.log('Is Array:', Array.isArray(checkoutHistory));
-    
-    if (!checkoutHistory || !Array.isArray(checkoutHistory) || checkoutHistory.length === 0) {
-      console.log('Returning default stats due to invalid input');
+    console.log('calculateUserStats input:', checkoutHistory);
+    if (!Array.isArray(checkoutHistory)) {
+      console.error('calculateUserStats: checkoutHistory is not an array!', checkoutHistory);
       return { streak: 0, weeklyWins: 0 };
     }
-
-    // Calculate current streak
+    if (checkoutHistory.length === 0) {
+      return { streak: 0, weeklyWins: 0 };
+    }
+    // Defensive copy before sort
+    const sortedHistory = [...checkoutHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
     let currentStreak = 0;
     const today = new Date().toISOString().split('T')[0];
-    const sortedHistory = checkoutHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
-    
     for (let i = 0; i < sortedHistory.length; i++) {
       const entry = sortedHistory[i];
       const entryDate = new Date(entry.date);
       const expectedDate = new Date();
       expectedDate.setDate(expectedDate.getDate() - i);
-      
       if (entryDate.toISOString().split('T')[0] === expectedDate.toISOString().split('T')[0]) {
         currentStreak++;
       } else {
         break;
       }
     }
-    
-    // Calculate weekly wins (last 7 days with rating >= 3)
     const lastWeek = sortedHistory.slice(0, 7);
     const weeklyWinsCount = lastWeek.filter(entry => entry.rating >= 3).length;
-    
     return { streak: currentStreak, weeklyWins: weeklyWinsCount };
   };
 

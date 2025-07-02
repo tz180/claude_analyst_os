@@ -57,6 +57,7 @@ export const dailyCheckinServices = {
       console.error('Error fetching checkout history:', error);
       return [];
     }
+    console.log('getCheckoutHistory raw data:', data);
     return data.map(item => ({
       date: item.date,
       reflection: item.reflection,
