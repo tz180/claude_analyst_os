@@ -281,7 +281,12 @@ const AnalystOS = () => {
 
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
+    console.log('calculateUserStats called with:', checkoutHistory);
+    console.log('Type of checkoutHistory:', typeof checkoutHistory);
+    console.log('Is Array:', Array.isArray(checkoutHistory));
+    
     if (!checkoutHistory || !Array.isArray(checkoutHistory) || checkoutHistory.length === 0) {
+      console.log('Returning default stats due to invalid input');
       return { streak: 0, weeklyWins: 0 };
     }
 
@@ -333,6 +338,10 @@ const AnalystOS = () => {
       const formerCoverageResult = formerCoverageData.status === 'fulfilled' ? formerCoverageData.value : [];
       const deliverablesResult = deliverablesData.status === 'fulfilled' ? deliverablesData.value : [];
       const pipelineIdeasResult = pipelineIdeasData.status === 'fulfilled' ? pipelineIdeasData.value : [];
+
+      console.log('checkoutHistoryResult:', checkoutHistoryResult);
+      console.log('Type of checkoutHistoryResult:', typeof checkoutHistoryResult);
+      console.log('Is Array:', Array.isArray(checkoutHistoryResult));
 
       setCheckoutHistory(checkoutHistoryResult);
       setCoverage(activeCoverageResult);
