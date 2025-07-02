@@ -768,7 +768,7 @@ const AnalystOS = () => {
         {/* Analytics Grid - Testing components one by one */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <QuickStatsCard analytics={analytics} />
-          {/* <PipelineVelocityCard pipelineVelocity={analytics?.pipelineVelocity} /> */}
+          <PipelineVelocityCard pipelineVelocity={analytics?.pipelineVelocity} />
         </div>
 
         {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
