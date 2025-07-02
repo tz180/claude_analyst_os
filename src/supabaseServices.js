@@ -494,7 +494,7 @@ export const analyticsServices = {
       .from('coverage_universe')
       .select('*')
       .eq('user_id', userId)
-      .eq('is_active', true)
+      .eq('status', 'active')
       .order('last_model_date', { ascending: false });
     
     if (error) {
@@ -644,17 +644,27 @@ export const analyticsServices = {
 
   // Get comprehensive dashboard analytics
   async getDashboardAnalytics() {
-    const [pipelineVelocity, coverageActivity, productivityMetrics] = await Promise.all([
-      this.getPipelineVelocity(),
-      this.getCoverageActivity(),
-      this.getProductivityMetrics()
-    ]);
+    try {
+      const [pipelineVelocity, coverageActivity, productivityMetrics] = await Promise.all([
+        this.getPipelineVelocity(),
+        this.getCoverageActivity(),
+        this.getProductivityMetrics()
+      ]);
 
-    return {
-      pipelineVelocity,
-      coverageActivity,
-      productivityMetrics,
-      timestamp: new Date().toISOString()
-    };
+      return {
+        pipelineVelocity: pipelineVelocity || {},
+        coverageActivity: coverageActivity || {},
+        productivityMetrics: productivityMetrics || {},
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error getting dashboard analytics:', error);
+      return {
+        pipelineVelocity: {},
+        coverageActivity: {},
+        productivityMetrics: {},
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 }; 
