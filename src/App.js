@@ -363,8 +363,8 @@ const AnalystOS = () => {
       const todayGoals = getTodayGoals();
       setDailyGoals(todayGoals);
 
-      // Refresh analytics after data loads
-      await loadAnalyticsData();
+      // Temporarily disable analytics to debug sort error
+      // await loadAnalyticsData();
 
     } catch (error) {
       console.error('Error loading data:', error);
@@ -765,8 +765,8 @@ const AnalystOS = () => {
           )}
         </div>
 
-        {/* Analytics Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Analytics Grid - Temporarily disabled to debug sort error */}
+        {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <QuickStatsCard analytics={analytics} />
           <PipelineVelocityCard pipelineVelocity={analytics?.pipelineVelocity} />
         </div>
@@ -774,7 +774,7 @@ const AnalystOS = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CoverageActivityCard coverageActivity={analytics?.coverageActivity} />
           <ProductivityMetricsCard productivityMetrics={analytics?.productivityMetrics} />
-        </div>
+        </div> */}
 
         {/* Quick Actions */}
         <div className="bg-white p-6 rounded-lg shadow-sm border">
