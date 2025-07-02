@@ -363,8 +363,8 @@ const AnalystOS = () => {
       const todayGoals = getTodayGoals();
       setDailyGoals(todayGoals);
 
-      // Temporarily disable analytics to debug sort error
-      // await loadAnalyticsData();
+      // Refresh analytics after data loads
+      await loadAnalyticsData();
 
     } catch (error) {
       console.error('Error loading data:', error);
