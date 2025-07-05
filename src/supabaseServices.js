@@ -710,5 +710,46 @@ export const analyticsServices = {
         timestamp: new Date().toISOString()
       };
     }
+  },
+
+  // Get connected data for a specific ticker
+  async getConnectedData(ticker) {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+
+    try {
+      // Get pipeline data for this ticker
+      const { data: pipelineData, error: pipelineError } = await supabase
+        .from('pipeline_ideas')
+        .select('*')
+        .eq('user_id', userId)
+        .ilike('ticker', `%${ticker}%`)
+        .single();
+
+      // Get coverage data for this ticker
+      const { data: coverageData, error: coverageError } = await supabase
+        .from('coverage_universe')
+        .select('*')
+        .eq('user_id', userId)
+        .ilike('ticker', `%${ticker}%`)
+        .single();
+
+      // Get deliverables (memos/models) for this ticker
+      const { data: deliverablesData, error: deliverablesError } = await supabase
+        .from('deliverables')
+        .select('*')
+        .eq('user_id', userId)
+        .ilike('company', `%${ticker}%`)
+        .order('created_at', { ascending: false });
+
+      return {
+        pipeline: pipelineError ? null : pipelineData,
+        coverage: coverageError ? null : coverageData,
+        deliverables: deliverablesError ? [] : deliverablesData
+      };
+    } catch (error) {
+      console.error('Error fetching connected data:', error);
+      return null;
+    }
   }
 }; 

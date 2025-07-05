@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft, Link, Target, FileText } from 'lucide-react';
 import { stockServices } from '../stockServices';
+import { analyticsServices } from '../supabaseServices';
 
 const StockCRM = ({ ticker, onBack }) => {
   const [stockData, setStockData] = useState(null);
@@ -9,6 +10,7 @@ const StockCRM = ({ ticker, onBack }) => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [newNote, setNewNote] = useState('');
+  const [connectedData, setConnectedData] = useState(null);
 
   useEffect(() => {
     if (ticker) {
@@ -34,6 +36,10 @@ const StockCRM = ({ ticker, onBack }) => {
       if (overviewResult.success) {
         setCompanyData(overviewResult.data);
       }
+
+      // Load connected data from your existing systems
+      const connectedResult = await analyticsServices.getConnectedData(ticker);
+      setConnectedData(connectedResult);
 
     } catch (err) {
       setError('Failed to load stock data');
@@ -158,6 +164,7 @@ const StockCRM = ({ ticker, onBack }) => {
             {[
               { id: 'overview', label: 'Overview', icon: BarChart3 },
               { id: 'fundamentals', label: 'Fundamentals', icon: DollarSign },
+              { id: 'connected', label: 'Connected Data', icon: Link },
               { id: 'notes', label: 'Notes', icon: MessageSquare },
               { id: 'calendar', label: 'Calendar', icon: Calendar }
             ].map((tab) => (
@@ -242,6 +249,153 @@ const StockCRM = ({ ticker, onBack }) => {
                     <div><span className="text-gray-600">Beta:</span> {companyData.beta || 'N/A'}</div>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Connected Data Tab */}
+          {activeTab === 'connected' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Connected Research Data</h3>
+                <p className="text-gray-600 text-sm mb-6">
+                  View how this stock connects to your pipeline, coverage, and deliverables across Analyst OS.
+                </p>
+              </div>
+
+              {/* Pipeline Status */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Target size={20} className="text-blue-600" />
+                  <h4 className="font-medium">Pipeline Status</h4>
+                </div>
+                {connectedData?.pipeline ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Status:</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        connectedData.pipeline.status === 'On Deck' ? 'bg-blue-100 text-blue-800' :
+                        connectedData.pipeline.status === 'Core' ? 'bg-green-100 text-green-800' :
+                        connectedData.pipeline.status === 'Passed' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {connectedData.pipeline.status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Company:</span>
+                      <span className="text-sm font-medium">{connectedData.pipeline.company}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Added:</span>
+                      <span className="text-sm">{connectedData.pipeline.date_added}</span>
+                    </div>
+                    {connectedData.pipeline.pass_reason && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Pass Reason:</span>
+                        <span className="text-sm text-red-600">{connectedData.pipeline.pass_reason}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <Target size={32} className="mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">Not in pipeline</p>
+                    <button className="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600">
+                      Add to Pipeline
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Coverage Status */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-3">
+                  <BarChart3 size={20} className="text-green-600" />
+                  <h4 className="font-medium">Coverage Status</h4>
+                </div>
+                {connectedData?.coverage ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Status:</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        connectedData.coverage.status === 'active' ? 'bg-green-100 text-green-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {connectedData.coverage.status === 'active' ? 'Active Coverage' : 'Former Coverage'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Company:</span>
+                      <span className="text-sm font-medium">{connectedData.coverage.company_name}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Sector:</span>
+                      <span className="text-sm">{connectedData.coverage.sector}</span>
+                    </div>
+                    {connectedData.coverage.last_model_date && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Last Model:</span>
+                        <span className="text-sm">{new Date(connectedData.coverage.last_model_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {connectedData.coverage.last_memo_date && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Last Memo:</span>
+                        <span className="text-sm">{new Date(connectedData.coverage.last_memo_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <BarChart3 size={32} className="mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">Not in coverage</p>
+                    <button className="mt-2 bg-green-500 text-white px-3 py-1 rounded text-xs hover:bg-green-600">
+                      Add to Coverage
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Deliverables */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-3">
+                  <FileText size={20} className="text-purple-600" />
+                  <h4 className="font-medium">Memos & Models</h4>
+                </div>
+                {connectedData?.deliverables && connectedData.deliverables.length > 0 ? (
+                  <div className="space-y-3">
+                    {connectedData.deliverables.map((deliverable, index) => (
+                      <div key={index} className="border-l-4 border-purple-500 pl-3 py-2 bg-white rounded">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h5 className="font-medium text-sm">{deliverable.title}</h5>
+                            <p className="text-xs text-gray-600">{deliverable.type} • {deliverable.priority} priority</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            deliverable.stage === 'completed' ? 'bg-green-100 text-green-800' :
+                            deliverable.stage === 'sent' ? 'bg-blue-100 text-blue-800' :
+                            deliverable.stage === 'in_draft' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {deliverable.stage}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Created: {new Date(deliverable.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <FileText size={32} className="mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No memos or models</p>
+                    <button className="mt-2 bg-purple-500 text-white px-3 py-1 rounded text-xs hover:bg-purple-600">
+                      Create Memo/Model
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
