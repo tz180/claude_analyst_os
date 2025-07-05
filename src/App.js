@@ -16,6 +16,7 @@ import {
   ProductivityMetricsCard, 
   QuickStatsCard 
 } from './components/Analytics';
+import StockCRM from './components/StockCRM';
 
 // ✅ MOVE TEXT INPUT COMPONENTS OUTSIDE - This prevents recreation
 const DisciplineEngine = ({ 
@@ -814,6 +815,16 @@ const AnalystOS = () => {
                   }`}
                 >
                   Daily Check-in
+                </button>
+                <button
+                  onClick={() => setCurrentView('stock-crm')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentView === 'stock-crm'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Stock CRM
                 </button>
         </div>
       </div>
@@ -1860,7 +1871,49 @@ const AnalystOS = () => {
             )}
           </div>
         );
-      default: 
+      case 'stock-crm':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold">Stock CRM</h2>
+                  <p className="text-gray-600">Research and track individual stocks with live data</p>
+                </div>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Enter ticker (e.g., AAPL)"
+                    className="px-3 py-2 border rounded-lg"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        const ticker = e.target.value.toUpperCase();
+                        if (ticker) {
+                          setCurrentView(`stock-crm-${ticker}`);
+                        }
+                      }
+                    }}
+                  />
+                  <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Search
+                  </button>
+                </div>
+              </div>
+              
+              <div className="text-center py-12 text-gray-500">
+                <BarChart3 size={64} className="mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium mb-2">Search for a Stock</h3>
+                <p className="text-sm">Enter a ticker symbol above to view detailed stock information, fundamentals, and add research notes.</p>
+              </div>
+            </div>
+          </div>
+        );
+      default:
+        // Check if it's a stock CRM page (format: stock-crm-TICKER)
+        if (currentView.startsWith('stock-crm-')) {
+          const ticker = currentView.replace('stock-crm-', '');
+          return <StockCRM ticker={ticker} />;
+        }
         return <Dashboard />;
     }
   };
