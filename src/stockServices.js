@@ -7,14 +7,18 @@ console.log('=== ENVIRONMENT DEBUG ===');
 console.log('process.env.REACT_APP_ALPHA_VANTAGE_API_KEY:', process.env.REACT_APP_ALPHA_VANTAGE_API_KEY);
 console.log('ALPHA_VANTAGE_API_KEY variable:', ALPHA_VANTAGE_API_KEY);
 console.log('API key length:', ALPHA_VANTAGE_API_KEY ? ALPHA_VANTAGE_API_KEY.length : 'undefined');
+console.log('API key type:', typeof ALPHA_VANTAGE_API_KEY);
+console.log('API key truthy check:', !!ALPHA_VANTAGE_API_KEY);
 console.log('All REACT_APP env vars:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP')));
 console.log('All environment variables:', Object.keys(process.env));
 console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('Vercel environment check:', process.env.VERCEL ? 'Running on Vercel' : 'Not on Vercel');
 console.log('=== END DEBUG ===');
 
 // Check if API key is configured
 if (!ALPHA_VANTAGE_API_KEY) {
   console.warn('Alpha Vantage API key not found. Please set REACT_APP_ALPHA_VANTAGE_API_KEY in your .env file or Vercel environment variables');
+  console.warn('Current environment variables available:', Object.keys(process.env).filter(key => key.includes('ALPHA')));
 }
 
 export const stockServices = {
