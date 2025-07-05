@@ -98,7 +98,7 @@ export const dailyCheckinServices = {
     const checkinWithRating = {
       ...checkinData,
       user_id: userId,
-      rating: checkinData.rating || 3 // Default to 3 if no rating provided
+      rating: typeof checkinData.rating === 'number' ? checkinData.rating : 3 // Use actual rating if provided
     };
 
     const { data, error } = await supabase
