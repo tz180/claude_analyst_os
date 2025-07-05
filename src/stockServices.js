@@ -116,6 +116,15 @@ export const stockServices = {
         return { success: false, error: `API rate limit exceeded: ${quoteData['Note']}` };
       }
       
+      // Check for Alpha Vantage information message (rate limit)
+      if (quoteData['Information'] && quoteData['Information'].includes('API key')) {
+        console.log('Alpha Vantage rate limit detected:', quoteData['Information']);
+        return { 
+          success: false, 
+          error: `Alpha Vantage free tier limit reached. Please wait a few minutes and try again, or upgrade to premium for unlimited access.` 
+        };
+      }
+      
       const quote = quoteData['Global Quote'];
       if (!quote || Object.keys(quote).length === 0) {
         console.log('No GLOBAL_QUOTE data, trying TIME_SERIES_INTRADAY...');
@@ -139,6 +148,15 @@ export const stockServices = {
         
         if (data['Note']) {
           return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
+        }
+        
+        // Check for Alpha Vantage information message (rate limit)
+        if (data['Information'] && data['Information'].includes('API key')) {
+          console.log('Alpha Vantage rate limit detected:', data['Information']);
+          return { 
+            success: false, 
+            error: `Alpha Vantage free tier limit reached. Please wait a few minutes and try again, or upgrade to premium for unlimited access.` 
+          };
         }
         
         // Check if we have time series data
