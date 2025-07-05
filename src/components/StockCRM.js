@@ -110,12 +110,25 @@ const StockCRM = ({ ticker, onBack }) => {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-700">Error: {error}</p>
-        <button 
-          onClick={loadStockData}
-          className="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-        >
-          Retry
-        </button>
+        <div className="mt-4 space-y-2">
+          <button 
+            onClick={loadStockData}
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 mr-2"
+          >
+            Retry
+          </button>
+          <button 
+            onClick={async () => {
+              console.log('Testing API key...');
+              const result = await stockServices.testAPIKey();
+              console.log('API test result:', result);
+              alert(result.success ? 'API key is working!' : `API test failed: ${result.error}`);
+            }}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Test API Key
+          </button>
+        </div>
       </div>
     );
   }

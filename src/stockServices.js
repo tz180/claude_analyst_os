@@ -15,6 +15,36 @@ if (!ALPHA_VANTAGE_API_KEY) {
 }
 
 export const stockServices = {
+  // Test API key with a simple endpoint
+  async testAPIKey() {
+    if (!ALPHA_VANTAGE_API_KEY) {
+      return { success: false, error: 'Alpha Vantage API key not configured' };
+    }
+
+    try {
+      console.log('Testing API key with simple endpoint...');
+      const response = await fetch(
+        `${ALPHA_VANTAGE_BASE_URL}?function=SYMBOL_SEARCH&keywords=IBM&apikey=${ALPHA_VANTAGE_API_KEY}`
+      );
+      
+      const data = await response.json();
+      console.log('API test response:', data);
+      
+      if (data['Error Message']) {
+        return { success: false, error: data['Error Message'] };
+      }
+      
+      if (data['Note']) {
+        return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
+      }
+      
+      return { success: true, message: 'API key is working', data: data };
+    } catch (error) {
+      console.error('Error testing API key:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // Check API key status and usage
   async checkAPIStatus() {
     if (!ALPHA_VANTAGE_API_KEY) {
@@ -53,89 +83,101 @@ export const stockServices = {
 
     try {
       console.log(`Fetching stock quote for ${symbol}...`);
-      // Try TIME_SERIES_INTRADAY first (more reliable for free tier)
-      const response = await fetch(
-        `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&apikey=${ALPHA_VANTAGE_API_KEY}`
+      console.log('Using API key:', ALPHA_VANTAGE_API_KEY.substring(0, 8) + '...');
+      
+      // Try GLOBAL_QUOTE first (more reliable for free tier)
+      console.log('Trying GLOBAL_QUOTE endpoint...');
+      const quoteResponse = await fetch(
+        `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!quoteResponse.ok) {
+        throw new Error(`HTTP error! status: ${quoteResponse.status}`);
       }
       
-      const data = await response.json();
-      console.log('Alpha Vantage response:', data);
-      console.log('Response keys:', Object.keys(data));
+      const quoteData = await quoteResponse.json();
+      console.log('GLOBAL_QUOTE response:', quoteData);
+      console.log('GLOBAL_QUOTE response keys:', Object.keys(quoteData));
       
-      if (data['Error Message']) {
-        return { success: false, error: data['Error Message'] };
+      if (quoteData['Error Message']) {
+        console.log('GLOBAL_QUOTE error:', quoteData['Error Message']);
+        return { success: false, error: quoteData['Error Message'] };
       }
       
-      if (data['Note']) {
-        return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
+      if (quoteData['Note']) {
+        console.log('GLOBAL_QUOTE rate limit:', quoteData['Note']);
+        return { success: false, error: `API rate limit exceeded: ${quoteData['Note']}` };
       }
       
-      // Check if we have time series data
-      const timeSeriesData = data['Time Series (1min)'];
-      if (!timeSeriesData || Object.keys(timeSeriesData).length === 0) {
-        console.log('No time series data found, trying GLOBAL_QUOTE...');
+      const quote = quoteData['Global Quote'];
+      if (!quote || Object.keys(quote).length === 0) {
+        console.log('No GLOBAL_QUOTE data, trying TIME_SERIES_INTRADAY...');
         
-        // Fallback to GLOBAL_QUOTE
-        const quoteResponse = await fetch(
-          `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+        // Fallback to TIME_SERIES_INTRADAY
+        const response = await fetch(
+          `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&apikey=${ALPHA_VANTAGE_API_KEY}`
         );
         
-        const quoteData = await quoteResponse.json();
-        console.log('GLOBAL_QUOTE response:', quoteData);
-        
-        if (quoteData['Error Message']) {
-          return { success: false, error: quoteData['Error Message'] };
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        if (quoteData['Note']) {
-          return { success: false, error: `API rate limit exceeded: ${quoteData['Note']}` };
+        const data = await response.json();
+        console.log('TIME_SERIES_INTRADAY response:', data);
+        console.log('TIME_SERIES_INTRADAY response keys:', Object.keys(data));
+        
+        if (data['Error Message']) {
+          return { success: false, error: data['Error Message'] };
         }
         
-        const quote = quoteData['Global Quote'];
-        if (!quote || Object.keys(quote).length === 0) {
-          return { success: false, error: `No data found for symbol: ${symbol}. This could be due to rate limits or the symbol not being available in the free tier.` };
+        if (data['Note']) {
+          return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
         }
+        
+        // Check if we have time series data
+        const timeSeriesData = data['Time Series (1min)'];
+        if (!timeSeriesData || Object.keys(timeSeriesData).length === 0) {
+          return { success: false, error: `No data found for symbol: ${symbol}. This could be due to rate limits or the symbol not being available in the free tier. Try again in a few minutes.` };
+        }
+        
+        // Parse TIME_SERIES_INTRADAY data
+        const latestTime = Object.keys(timeSeriesData)[0];
+        const latestData = timeSeriesData[latestTime];
+        
+        console.log('Latest time series data:', latestData);
         
         return {
           success: true,
           data: {
-            symbol: quote['01. symbol'],
-            price: parseFloat(quote['05. price']),
-            change: parseFloat(quote['09. change']),
-            changePercent: quote['10. change percent'],
-            volume: parseInt(quote['06. volume']),
-            previousClose: parseFloat(quote['08. previous close']),
-            open: parseFloat(quote['02. open']),
-            high: parseFloat(quote['03. high']),
-            low: parseFloat(quote['04. low']),
-            lastUpdated: quote['07. latest trading day']
+            symbol: symbol,
+            price: parseFloat(latestData['4. close']),
+            change: 0, // We'll calculate this if needed
+            changePercent: '0.00%', // We'll calculate this if needed
+            volume: parseInt(latestData['5. volume']),
+            previousClose: parseFloat(latestData['4. close']), // Same as current for now
+            open: parseFloat(latestData['1. open']),
+            high: parseFloat(latestData['2. high']),
+            low: parseFloat(latestData['3. low']),
+            lastUpdated: latestTime
           }
         };
       }
       
-      // Parse TIME_SERIES_INTRADAY data
-      const latestTime = Object.keys(timeSeriesData)[0];
-      const latestData = timeSeriesData[latestTime];
-      
-      console.log('Latest time series data:', latestData);
+      console.log('GLOBAL_QUOTE data found:', quote);
       
       return {
         success: true,
         data: {
-          symbol: symbol,
-          price: parseFloat(latestData['4. close']),
-          change: 0, // We'll calculate this if needed
-          changePercent: '0.00%', // We'll calculate this if needed
-          volume: parseInt(latestData['5. volume']),
-          previousClose: parseFloat(latestData['4. close']), // Same as current for now
-          open: parseFloat(latestData['1. open']),
-          high: parseFloat(latestData['2. high']),
-          low: parseFloat(latestData['3. low']),
-          lastUpdated: latestTime
+          symbol: quote['01. symbol'],
+          price: parseFloat(quote['05. price']),
+          change: parseFloat(quote['09. change']),
+          changePercent: quote['10. change percent'],
+          volume: parseInt(quote['06. volume']),
+          previousClose: parseFloat(quote['08. previous close']),
+          open: parseFloat(quote['02. open']),
+          high: parseFloat(quote['03. high']),
+          low: parseFloat(quote['04. low']),
+          lastUpdated: quote['07. latest trading day']
         }
       };
     } catch (error) {
