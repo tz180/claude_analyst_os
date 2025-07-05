@@ -134,6 +134,43 @@ const StockCRM = ({ ticker, onBack }) => {
           </div>
         </div>
 
+        {/* Pipeline and Coverage Status */}
+        <div className="flex space-x-4 mb-4">
+          {/* Pipeline Status */}
+          <div className="flex items-center space-x-2">
+            <Target size={16} className="text-blue-600" />
+            <span className="text-sm text-gray-600">Pipeline:</span>
+            {connectedData?.pipeline ? (
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                connectedData.pipeline.status === 'On Deck' ? 'bg-blue-100 text-blue-800' :
+                connectedData.pipeline.status === 'Core' ? 'bg-green-100 text-green-800' :
+                connectedData.pipeline.status === 'Passed' ? 'bg-red-100 text-red-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {connectedData.pipeline.status}
+              </span>
+            ) : (
+              <span className="text-sm text-gray-400">Not in pipeline</span>
+            )}
+          </div>
+
+          {/* Coverage Status */}
+          <div className="flex items-center space-x-2">
+            <BarChart3 size={16} className="text-green-600" />
+            <span className="text-sm text-gray-600">Coverage:</span>
+            {connectedData?.coverage ? (
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                connectedData.coverage.status === 'active' ? 'bg-green-100 text-green-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {connectedData.coverage.status === 'active' ? 'Active' : 'Former'}
+              </span>
+            ) : (
+              <span className="text-sm text-gray-400">Not in coverage</span>
+            )}
+          </div>
+        </div>
+
         {/* Quick stats */}
         {stockData && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -164,7 +201,6 @@ const StockCRM = ({ ticker, onBack }) => {
             {[
               { id: 'overview', label: 'Overview', icon: BarChart3 },
               { id: 'fundamentals', label: 'Fundamentals', icon: DollarSign },
-              { id: 'connected', label: 'Connected Data', icon: Link },
               { id: 'notes', label: 'Notes', icon: MessageSquare },
               { id: 'calendar', label: 'Calendar', icon: Calendar }
             ].map((tab) => (
@@ -253,120 +289,26 @@ const StockCRM = ({ ticker, onBack }) => {
             </div>
           )}
 
-          {/* Connected Data Tab */}
-          {activeTab === 'connected' && (
+          {/* Notes Tab */}
+          {activeTab === 'notes' && (
             <div className="space-y-6">
+              {/* Memos & Models Section */}
               <div>
-                <h3 className="text-lg font-semibold mb-4">Connected Research Data</h3>
-                <p className="text-gray-600 text-sm mb-6">
-                  View how this stock connects to your pipeline, coverage, and deliverables across Analyst OS.
-                </p>
-              </div>
-
-              {/* Pipeline Status */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-center space-x-2 mb-3">
-                  <Target size={20} className="text-blue-600" />
-                  <h4 className="font-medium">Pipeline Status</h4>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center space-x-2">
+                    <FileText size={20} className="text-purple-600" />
+                    <span>Memos & Models</span>
+                  </h3>
+                  <button className="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600 flex items-center space-x-1">
+                    <Plus size={14} />
+                    <span>Create New</span>
+                  </button>
                 </div>
-                {connectedData?.pipeline ? (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Status:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        connectedData.pipeline.status === 'On Deck' ? 'bg-blue-100 text-blue-800' :
-                        connectedData.pipeline.status === 'Core' ? 'bg-green-100 text-green-800' :
-                        connectedData.pipeline.status === 'Passed' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {connectedData.pipeline.status}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Company:</span>
-                      <span className="text-sm font-medium">{connectedData.pipeline.company}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Added:</span>
-                      <span className="text-sm">{connectedData.pipeline.date_added}</span>
-                    </div>
-                    {connectedData.pipeline.pass_reason && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Pass Reason:</span>
-                        <span className="text-sm text-red-600">{connectedData.pipeline.pass_reason}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <Target size={32} className="mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">Not in pipeline</p>
-                    <button className="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600">
-                      Add to Pipeline
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Coverage Status */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-center space-x-2 mb-3">
-                  <BarChart3 size={20} className="text-green-600" />
-                  <h4 className="font-medium">Coverage Status</h4>
-                </div>
-                {connectedData?.coverage ? (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Status:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        connectedData.coverage.status === 'active' ? 'bg-green-100 text-green-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {connectedData.coverage.status === 'active' ? 'Active Coverage' : 'Former Coverage'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Company:</span>
-                      <span className="text-sm font-medium">{connectedData.coverage.company_name}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Sector:</span>
-                      <span className="text-sm">{connectedData.coverage.sector}</span>
-                    </div>
-                    {connectedData.coverage.last_model_date && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Last Model:</span>
-                        <span className="text-sm">{new Date(connectedData.coverage.last_model_date).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                    {connectedData.coverage.last_memo_date && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Last Memo:</span>
-                        <span className="text-sm">{new Date(connectedData.coverage.last_memo_date).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <BarChart3 size={32} className="mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">Not in coverage</p>
-                    <button className="mt-2 bg-green-500 text-white px-3 py-1 rounded text-xs hover:bg-green-600">
-                      Add to Coverage
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Deliverables */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-center space-x-2 mb-3">
-                  <FileText size={20} className="text-purple-600" />
-                  <h4 className="font-medium">Memos & Models</h4>
-                </div>
+                
                 {connectedData?.deliverables && connectedData.deliverables.length > 0 ? (
                   <div className="space-y-3">
                     {connectedData.deliverables.map((deliverable, index) => (
-                      <div key={index} className="border-l-4 border-purple-500 pl-3 py-2 bg-white rounded">
+                      <div key={index} className="border-l-4 border-purple-500 pl-3 py-2 bg-gray-50 rounded">
                         <div className="flex justify-between items-start">
                           <div>
                             <h5 className="font-medium text-sm">{deliverable.title}</h5>
@@ -388,47 +330,46 @@ const StockCRM = ({ ticker, onBack }) => {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-4 text-gray-500">
+                  <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
                     <FileText size={32} className="mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No memos or models</p>
-                    <button className="mt-2 bg-purple-500 text-white px-3 py-1 rounded text-xs hover:bg-purple-600">
-                      Create Memo/Model
-                    </button>
+                    <p className="text-sm">No memos or models for this stock</p>
+                    <p className="text-xs text-gray-400 mt-1">Create your first memo or model to get started</p>
                   </div>
                 )}
               </div>
-            </div>
-          )}
 
-          {/* Notes Tab */}
-          {activeTab === 'notes' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Research Notes</h3>
-                <button className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 flex items-center space-x-1">
-                  <Plus size={14} />
-                  <span>Add Note</span>
-                </button>
-              </div>
-              
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <textarea
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder="Add your research notes, thoughts, or observations about this stock..."
-                  className="w-full p-3 border rounded-lg resize-none"
-                  rows={4}
-                />
-                <div className="mt-2 flex justify-end">
-                  <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                    Save Note
+              {/* Research Notes Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center space-x-2">
+                    <MessageSquare size={20} className="text-blue-600" />
+                    <span>Research Notes</span>
+                  </h3>
+                  <button className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 flex items-center space-x-1">
+                    <Plus size={14} />
+                    <span>Add Note</span>
                   </button>
                 </div>
-              </div>
-              
-              <div className="text-center text-gray-500 py-8">
-                <MessageSquare size={48} className="mx-auto mb-2 text-gray-300" />
-                <p>No notes yet. Start adding your research notes above.</p>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="Add your research notes, thoughts, or observations about this stock..."
+                    className="w-full p-3 border rounded-lg resize-none"
+                    rows={4}
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                      Save Note
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="text-center text-gray-500 py-8">
+                  <MessageSquare size={48} className="mx-auto mb-2 text-gray-300" />
+                  <p>No notes yet. Start adding your research notes above.</p>
+                </div>
               </div>
             </div>
           )}
