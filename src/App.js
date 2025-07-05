@@ -1315,7 +1315,8 @@ const AnalystOS = () => {
                     const filtered = coverage.filter(company => {
                       const matchesSearch = !coverageSearch || 
                         company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
-                        company.ticker.toLowerCase().includes(coverageSearch.toLowerCase());
+                        company.ticker.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                        (company.sector && company.sector.toLowerCase().includes(coverageSearch.toLowerCase()));
                       const matchesFilter = coverageFilter === 'all' || coverageFilter === 'active';
                       return matchesSearch && matchesFilter;
                     });
@@ -1326,13 +1327,14 @@ const AnalystOS = () => {
               </div>
               <div className="p-4 space-y-4">
                 {(() => {
-                  const filtered = coverage.filter(company => {
-                    const matchesSearch = !coverageSearch || 
-                      company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
-                      company.ticker.toLowerCase().includes(coverageSearch.toLowerCase());
-                    const matchesFilter = coverageFilter === 'all' || coverageFilter === 'active';
-                    return matchesSearch && matchesFilter;
-                  });
+                                      const filtered = coverage.filter(company => {
+                      const matchesSearch = !coverageSearch || 
+                        company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                        company.ticker.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                        (company.sector && company.sector.toLowerCase().includes(coverageSearch.toLowerCase()));
+                      const matchesFilter = coverageFilter === 'all' || coverageFilter === 'active';
+                      return matchesSearch && matchesFilter;
+                    });
                   
                   return filtered.length > 0 ? (
                     filtered.map((company) => (
@@ -1344,6 +1346,11 @@ const AnalystOS = () => {
                               {company.ticker && (
                                 <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
                                   {company.ticker}
+                                </span>
+                              )}
+                              {company.sector && (
+                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                                  {company.sector}
                                 </span>
                               )}
                             </div>
@@ -1401,7 +1408,8 @@ const AnalystOS = () => {
                       const filtered = formerCompanies.filter(company => {
                         const matchesSearch = !coverageSearch || 
                           company.company.toLowerCase().includes(coverageSearch.toLowerCase()) ||
-                          company.ticker.toLowerCase().includes(coverageSearch.toLowerCase());
+                          company.ticker.toLowerCase().includes(coverageSearch.toLowerCase()) ||
+                          (company.sector && company.sector.toLowerCase().includes(coverageSearch.toLowerCase()));
                         const matchesFilter = coverageFilter === 'all' || coverageFilter === 'former';
                         return matchesSearch && matchesFilter;
                       });
@@ -1431,6 +1439,11 @@ const AnalystOS = () => {
                                   <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
                                     {company.ticker}
                         </span>
+                                )}
+                                {company.sector && (
+                                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                                    {company.sector}
+                                  </span>
                                 )}
                                 <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">
                                   {company.removalReason}
