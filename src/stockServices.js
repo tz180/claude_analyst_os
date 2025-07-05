@@ -2,6 +2,13 @@
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
+// Debug logging
+console.log('Environment check:');
+console.log('process.env.REACT_APP_ALPHA_VANTAGE_API_KEY:', process.env.REACT_APP_ALPHA_VANTAGE_API_KEY);
+console.log('ALPHA_VANTAGE_API_KEY variable:', ALPHA_VANTAGE_API_KEY);
+console.log('API key length:', ALPHA_VANTAGE_API_KEY ? ALPHA_VANTAGE_API_KEY.length : 'undefined');
+console.log('All REACT_APP env vars:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP')));
+
 // Check if API key is configured
 if (!ALPHA_VANTAGE_API_KEY) {
   console.warn('Alpha Vantage API key not found. Please set REACT_APP_ALPHA_VANTAGE_API_KEY in your .env file');
