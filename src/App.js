@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, CheckCircle, Plus, Award, LogOut, User } from 'lucide-react';
+import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3 } from 'lucide-react';
 import './App.css';
 import { 
   dailyCheckinServices, 
@@ -250,6 +250,7 @@ const AnalystOS = () => {
   const [pipelineIdeas, setPipelineIdeas] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [stockSearchTicker, setStockSearchTicker] = useState('');
   const [goalsHistory, setGoalsHistory] = useState([]);
 
   // Pipeline states
@@ -1884,17 +1885,19 @@ const AnalystOS = () => {
                   <input
                     type="text"
                     placeholder="Enter ticker (e.g., AAPL)"
+                    value={stockSearchTicker}
+                    onChange={(e) => setStockSearchTicker(e.target.value)}
                     className="px-3 py-2 border rounded-lg"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter') {
-                        const ticker = e.target.value.toUpperCase();
-                        if (ticker) {
-                          setCurrentView(`stock-crm-${ticker}`);
-                        }
+                        handleStockSearch();
                       }
                     }}
                   />
-                  <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                  <button 
+                    onClick={handleStockSearch}
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                  >
                     Search
                   </button>
                 </div>
@@ -1912,7 +1915,7 @@ const AnalystOS = () => {
         // Check if it's a stock CRM page (format: stock-crm-TICKER)
         if (currentView.startsWith('stock-crm-')) {
           const ticker = currentView.replace('stock-crm-', '');
-          return <StockCRM ticker={ticker} />;
+          return <StockCRM ticker={ticker} onBack={() => setCurrentView('stock-crm')} />;
         }
         return <Dashboard />;
     }
@@ -1964,6 +1967,15 @@ const AnalystOS = () => {
     setShowRemoveModal(false);
     setRemovingCompanyId(null);
     setRemoveReason('Not a fit');
+  };
+
+  // Handle stock search
+  const handleStockSearch = () => {
+    const ticker = stockSearchTicker.trim().toUpperCase();
+    if (ticker) {
+      setCurrentView(`stock-crm-${ticker}`);
+      setStockSearchTicker(''); // Clear the input after search
+    }
   };
 
   // Add notification function

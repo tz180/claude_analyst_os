@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft } from 'lucide-react';
 import { stockServices } from '../stockServices';
 
-const StockCRM = ({ ticker }) => {
+const StockCRM = ({ ticker, onBack }) => {
   const [stockData, setStockData] = useState(null);
   const [companyData, setCompanyData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -88,11 +88,22 @@ const StockCRM = ({ ticker }) => {
       {/* Header with ticker and basic info */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{ticker}</h1>
-            {companyData && (
-              <p className="text-gray-600">{companyData.name}</p>
+          <div className="flex items-center space-x-4">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft size={20} />
+                <span>Back to Search</span>
+              </button>
             )}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{ticker}</h1>
+              {companyData && (
+                <p className="text-gray-600">{companyData.name}</p>
+              )}
+            </div>
           </div>
           <div className="text-right">
             {stockData && (
