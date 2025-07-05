@@ -1664,8 +1664,28 @@ const AnalystOS = () => {
                             onClick={async () => {
                               const stages = ['Started', 'In Draft', 'Sent'];
                               const currentIndex = stages.indexOf(memo.stage);
+                              const prevStage = currentIndex > 0 ? stages[currentIndex - 1] : memo.stage;
+                              const result = await deliverablesServices.updateDeliverableStage(memo.id, prevStage);
+                              if (result.success) {
+                                await loadDataFromSupabase(); // Refresh data
+                              } else {
+                                console.error('Error updating stage:', result.error);
+                              }
+                            }}
+                            disabled={memo.stage === 'Started'}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              memo.stage === 'Started'
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                            }`}
+                          >
+                            Previous 
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const stages = ['Started', 'In Draft', 'Sent'];
+                              const currentIndex = stages.indexOf(memo.stage);
                               const nextStage = currentIndex < stages.length - 1 ? stages[currentIndex + 1] : memo.stage;
-                              
                               const result = await deliverablesServices.updateDeliverableStage(memo.id, nextStage);
                               if (result.success) {
                                 await loadDataFromSupabase(); // Refresh data
@@ -1680,7 +1700,7 @@ const AnalystOS = () => {
                                 : 'bg-blue-500 text-white hover:bg-blue-600'
                             }`}
                           >
-                            Next →
+                            Next 
                           </button>
                         </div>
 
