@@ -3,15 +3,18 @@ const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
 // Debug logging
-console.log('Environment check:');
+console.log('=== ENVIRONMENT DEBUG ===');
 console.log('process.env.REACT_APP_ALPHA_VANTAGE_API_KEY:', process.env.REACT_APP_ALPHA_VANTAGE_API_KEY);
 console.log('ALPHA_VANTAGE_API_KEY variable:', ALPHA_VANTAGE_API_KEY);
 console.log('API key length:', ALPHA_VANTAGE_API_KEY ? ALPHA_VANTAGE_API_KEY.length : 'undefined');
 console.log('All REACT_APP env vars:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP')));
+console.log('All environment variables:', Object.keys(process.env));
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('=== END DEBUG ===');
 
 // Check if API key is configured
 if (!ALPHA_VANTAGE_API_KEY) {
-  console.warn('Alpha Vantage API key not found. Please set REACT_APP_ALPHA_VANTAGE_API_KEY in your .env file');
+  console.warn('Alpha Vantage API key not found. Please set REACT_APP_ALPHA_VANTAGE_API_KEY in your .env file or Vercel environment variables');
 }
 
 export const stockServices = {
@@ -392,4 +395,4 @@ export const stockServices = {
       return { success: false, error: error.message };
     }
   }
-}; 
+};
