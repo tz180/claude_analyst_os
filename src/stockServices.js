@@ -8,6 +8,36 @@ if (!ALPHA_VANTAGE_API_KEY) {
 }
 
 export const stockServices = {
+  // Check API key status and usage
+  async checkAPIStatus() {
+    if (!ALPHA_VANTAGE_API_KEY) {
+      return { success: false, error: 'Alpha Vantage API key not configured' };
+    }
+
+    try {
+      console.log('Checking Alpha Vantage API status...');
+      const response = await fetch(
+        `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=1min&apikey=${ALPHA_VANTAGE_API_KEY}`
+      );
+      
+      const data = await response.json();
+      console.log('API Status check response:', data);
+      
+      if (data['Error Message']) {
+        return { success: false, error: data['Error Message'] };
+      }
+      
+      if (data['Note']) {
+        return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
+      }
+      
+      return { success: true, message: 'API key is working' };
+    } catch (error) {
+      console.error('Error checking API status:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // Get real-time stock quote
   async getStockQuote(symbol) {
     if (!ALPHA_VANTAGE_API_KEY) {
@@ -15,6 +45,7 @@ export const stockServices = {
     }
 
     try {
+      console.log(`Fetching stock quote for ${symbol}...`);
       const response = await fetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
@@ -24,18 +55,19 @@ export const stockServices = {
       }
       
       const data = await response.json();
+      console.log('Alpha Vantage response:', data);
       
       if (data['Error Message']) {
         return { success: false, error: data['Error Message'] };
       }
       
       if (data['Note']) {
-        return { success: false, error: 'API rate limit exceeded. Please try again later.' };
+        return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
       }
       
       const quote = data['Global Quote'];
       if (!quote || Object.keys(quote).length === 0) {
-        return { success: false, error: 'No data found for this symbol' };
+        return { success: false, error: `No data found for symbol: ${symbol}. This could be due to rate limits or the symbol not being available in the free tier.` };
       }
       
       return {

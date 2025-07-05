@@ -1907,6 +1907,17 @@ const AnalystOS = () => {
                 <BarChart3 size={64} className="mx-auto mb-4 text-gray-300" />
                 <h3 className="text-lg font-medium mb-2">Search for a Stock</h3>
                 <p className="text-sm">Enter a ticker symbol above to view detailed stock information, fundamentals, and add research notes.</p>
+                <button 
+                  onClick={async () => {
+                    const { stockServices } = await import('./stockServices');
+                    const status = await stockServices.checkAPIStatus();
+                    console.log('API Status:', status);
+                    alert(status.success ? 'API is working!' : `API Error: ${status.error}`);
+                  }}
+                  className="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                >
+                  Test API Status
+                </button>
               </div>
             </div>
           </div>
