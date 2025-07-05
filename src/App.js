@@ -293,33 +293,67 @@ const AnalystOS = () => {
         return { streak: 0, weeklyWins: 0 };
       }
       
-      // Calculate streak without sorting - just check recent entries
+      // Sort checkout history by date (newest first) for proper streak calculation
+      const sortedHistory = [...checkoutHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
+      
       let currentStreak = 0;
       const today = new Date().toISOString().split('T')[0];
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       
       // Check if there's a checkout for today
-      const hasToday = checkoutHistory.some(entry => entry.date === today);
+      const hasToday = sortedHistory.some(entry => entry.date === today);
+      
       if (hasToday) {
         currentStreak = 1;
         
         // Count consecutive days backwards from today
-        let checkDate = yesterday;
+        let checkDate = new Date();
+        checkDate.setDate(checkDate.getDate() - 1); // Start with yesterday
+        
         for (let i = 1; i <= 30; i++) { // Limit to 30 days to prevent infinite loop
-          const hasEntry = checkoutHistory.some(entry => entry.date === checkDate);
+          const checkDateStr = checkDate.toISOString().split('T')[0];
+          const hasEntry = sortedHistory.some(entry => entry.date === checkDateStr);
+          
           if (hasEntry) {
             currentStreak++;
-            checkDate = new Date(Date.now() - (i + 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            checkDate.setDate(checkDate.getDate() - 1); // Move to previous day
           } else {
-            break;
+            break; // Streak broken
+          }
+        }
+      } else {
+        // If no checkout today, check if there was one yesterday to start counting backwards
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        
+        const hasYesterday = sortedHistory.some(entry => entry.date === yesterdayStr);
+        if (hasYesterday) {
+          currentStreak = 1;
+          
+          // Count consecutive days backwards from yesterday
+          let checkDate = new Date();
+          checkDate.setDate(checkDate.getDate() - 2); // Start with day before yesterday
+          
+          for (let i = 2; i <= 30; i++) {
+            const checkDateStr = checkDate.toISOString().split('T')[0];
+            const hasEntry = sortedHistory.some(entry => entry.date === checkDateStr);
+            
+            if (hasEntry) {
+              currentStreak++;
+              checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+              break;
+            }
           }
         }
       }
       
       // Calculate weekly wins (last 7 days with rating >= 3)
-      const lastWeek = checkoutHistory.filter(entry => {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      
+      const lastWeek = sortedHistory.filter(entry => {
         const entryDate = new Date(entry.date);
-        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         return entryDate >= weekAgo && entry.rating >= 3;
       });
       
@@ -390,7 +424,9 @@ const AnalystOS = () => {
       setPipelineIdeas(pipelineIdeasResult);
 
       // Calculate user stats from checkout history
+      console.log('Calculating user stats with checkout history:', checkoutHistoryResult);
       const userStats = calculateUserStats(checkoutHistoryResult);
+      console.log('Calculated user stats:', userStats);
       if (userStats) {
         setStreak(userStats.streak || 0);
         setWeeklyWins(userStats.weeklyWins || 0);
@@ -667,6 +703,7 @@ const AnalystOS = () => {
       const result = await dailyCheckinServices.upsertCheckin({
         date: today,
         reflection: checkoutReflection.trim(),
+        rating: disciplineRating, // Include the discipline rating
         completed: true
       });
       

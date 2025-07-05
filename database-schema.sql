@@ -7,6 +7,7 @@ CREATE TABLE daily_checkins (
     date DATE NOT NULL,
     goals TEXT[],
     reflection TEXT,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5), -- Add rating field for discipline tracking
     completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

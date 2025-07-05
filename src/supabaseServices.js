@@ -61,7 +61,7 @@ export const dailyCheckinServices = {
     return data.map(item => ({
       date: item.date,
       reflection: item.reflection,
-      rating: 3 // Default rating for now
+      rating: item.rating || 3 // Use actual rating from database, default to 3 if null
     }));
   },
 
@@ -94,12 +94,16 @@ export const dailyCheckinServices = {
     const userId = await getCurrentUserId();
     if (!userId) return { success: false, error: 'User not authenticated' };
 
+    // Ensure rating is included in the data
+    const checkinWithRating = {
+      ...checkinData,
+      user_id: userId,
+      rating: checkinData.rating || 3 // Default to 3 if no rating provided
+    };
+
     const { data, error } = await supabase
       .from('daily_checkins')
-      .upsert({
-        ...checkinData,
-        user_id: userId
-      }, {
+      .upsert(checkinWithRating, {
         onConflict: 'user_id,date'
       });
     
