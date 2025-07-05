@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft, Link, Target, FileText } from 'lucide-react';
 import { stockServices } from '../stockServices';
-import { analyticsServices } from '../supabaseServices';
+import { analyticsServices, stockNotesServices } from '../supabaseServices';
 
 const StockCRM = ({ ticker, onBack }) => {
   const [stockData, setStockData] = useState(null);
@@ -10,6 +10,9 @@ const StockCRM = ({ ticker, onBack }) => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [newNote, setNewNote] = useState('');
+  const [newNoteTitle, setNewNoteTitle] = useState('');
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [notes, setNotes] = useState([]);
   const [connectedData, setConnectedData] = useState(null);
 
   useEffect(() => {
@@ -41,6 +44,10 @@ const StockCRM = ({ ticker, onBack }) => {
       const connectedResult = await analyticsServices.getConnectedData(ticker);
       setConnectedData(connectedResult);
 
+      // Load existing notes
+      const notesResult = await stockNotesServices.getNotes(ticker);
+      setNotes(notesResult);
+
     } catch (err) {
       setError('Failed to load stock data');
       console.error('Error loading stock data:', err);
@@ -65,6 +72,30 @@ const StockCRM = ({ ticker, onBack }) => {
   const formatPercent = (value) => {
     if (!value) return 'N/A';
     return `${parseFloat(value).toFixed(2)}%`;
+  };
+
+  const saveNote = async () => {
+    if (!newNote.trim() || !newNoteTitle.trim() || !stockData) return;
+    
+    const noteData = {
+      title: newNoteTitle,
+      content: newNote,
+      priceWhenWritten: stockData.price,
+      ticker: ticker
+    };
+    
+    const result = await stockNotesServices.addNote(noteData);
+    if (result.success) {
+      // Reload notes to get the updated list
+      const notesResult = await stockNotesServices.getNotes(ticker);
+      setNotes(notesResult);
+      setNewNote('');
+      setNewNoteTitle('');
+      setShowNoteForm(false);
+    } else {
+      console.error('Error saving note:', result.error);
+      // You could add a notification here
+    }
   };
 
   if (loading) {
@@ -292,6 +323,105 @@ const StockCRM = ({ ticker, onBack }) => {
           {/* Notes Tab */}
           {activeTab === 'notes' && (
             <div className="space-y-6">
+              {/* Research Notes Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center space-x-2">
+                    <MessageSquare size={20} className="text-blue-600" />
+                    <span>Research Notes</span>
+                  </h3>
+                  <button 
+                    onClick={() => setShowNoteForm(true)}
+                    className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 flex items-center space-x-1"
+                  >
+                    <Plus size={14} />
+                    <span>Add Note</span>
+                  </button>
+                </div>
+                
+                {/* Note Form */}
+                {showNoteForm && (
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Note Title</label>
+                      <input
+                        type="text"
+                        value={newNoteTitle}
+                        onChange={(e) => setNewNoteTitle(e.target.value)}
+                        placeholder="Enter a title for your note..."
+                        className="w-full p-2 border rounded-lg"
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Note Content</label>
+                      <textarea
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        placeholder="Add your research notes, thoughts, or observations about this stock..."
+                        className="w-full p-3 border rounded-lg resize-none"
+                        rows={4}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm text-gray-600">
+                        Current Price: {stockData ? formatCurrency(stockData.price) : 'N/A'}
+                      </div>
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={() => {
+                            setShowNoteForm(false);
+                            setNewNote('');
+                            setNewNoteTitle('');
+                          }}
+                          className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={saveNote}
+                          disabled={!newNote.trim() || !newNoteTitle.trim()}
+                          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                          Save Note
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Notes List */}
+                {notes.length > 0 ? (
+                  <div className="space-y-3">
+                    {notes.map((note, index) => (
+                      <div key={index} className="border-l-4 border-blue-500 pl-3 py-2 bg-gray-50 rounded">
+                        <div className="flex justify-between items-start mb-2">
+                          <h5 className="font-medium text-sm">{note.title}</h5>
+                          <div className="text-xs text-gray-500">
+                            {new Date(note.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-700 mb-2">{note.content}</p>
+                        <div className="flex items-center space-x-4 text-xs text-gray-600">
+                          <span>Price when written: {formatCurrency(note.price_when_written)}</span>
+                          {stockData && (
+                            <span className={`font-medium ${
+                              stockData.price > note.price_when_written ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {stockData.price > note.price_when_written ? '↗' : '↘'} {formatCurrency(Math.abs(stockData.price - note.price_when_written))} ({((Math.abs(stockData.price - note.price_when_written) / note.price_when_written) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <MessageSquare size={48} className="mx-auto mb-2 text-gray-300" />
+                    <p>No notes yet. Start adding your research notes above.</p>
+                  </div>
+                )}
+              </div>
+
               {/* Memos & Models Section */}
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -336,40 +466,6 @@ const StockCRM = ({ ticker, onBack }) => {
                     <p className="text-xs text-gray-400 mt-1">Create your first memo or model to get started</p>
                   </div>
                 )}
-              </div>
-
-              {/* Research Notes Section */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold flex items-center space-x-2">
-                    <MessageSquare size={20} className="text-blue-600" />
-                    <span>Research Notes</span>
-                  </h3>
-                  <button className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 flex items-center space-x-1">
-                    <Plus size={14} />
-                    <span>Add Note</span>
-                  </button>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <textarea
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    placeholder="Add your research notes, thoughts, or observations about this stock..."
-                    className="w-full p-3 border rounded-lg resize-none"
-                    rows={4}
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                      Save Note
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="text-center text-gray-500 py-8">
-                  <MessageSquare size={48} className="mx-auto mb-2 text-gray-300" />
-                  <p>No notes yet. Start adding your research notes above.</p>
-                </div>
               </div>
             </div>
           )}

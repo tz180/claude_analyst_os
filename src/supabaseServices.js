@@ -752,4 +752,49 @@ export const analyticsServices = {
       return null;
     }
   }
+};
+
+// Stock Notes Services
+export const stockNotesServices = {
+  // Get notes for a specific ticker
+  async getNotes(ticker) {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('stock_notes')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('ticker', ticker)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching notes:', error);
+      return [];
+    }
+    return data || [];
+  },
+
+  // Add a new note
+  async addNote(noteData) {
+    const userId = await getCurrentUserId();
+    if (!userId) return { success: false, error: 'User not authenticated' };
+
+    const { data, error } = await supabase
+      .from('stock_notes')
+      .insert({
+        user_id: userId,
+        ticker: noteData.ticker,
+        title: noteData.title,
+        content: noteData.content,
+        price_when_written: noteData.priceWhenWritten,
+        created_at: new Date().toISOString()
+      });
+    
+    if (error) {
+      console.error('Error adding note:', error);
+      return { success: false, error };
+    }
+    return { success: true, data };
+  }
 }; 
