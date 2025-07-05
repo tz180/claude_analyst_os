@@ -101,6 +101,8 @@ export const dailyCheckinServices = {
       rating: typeof checkinData.rating === 'number' ? checkinData.rating : 3 // Use actual rating if provided
     };
 
+    console.log('Upserting checkin with data:', checkinWithRating);
+
     const { data, error } = await supabase
       .from('daily_checkins')
       .upsert(checkinWithRating, {
@@ -111,6 +113,8 @@ export const dailyCheckinServices = {
       console.error('Error upserting checkin:', error);
       return { success: false, error };
     }
+    
+    console.log('Checkin upserted successfully:', data);
     return { success: true, data };
   },
 

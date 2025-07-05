@@ -700,6 +700,8 @@ const AnalystOS = () => {
   const completeDailyCheckout = async () => {
     if (checkoutReflection.trim()) {
       const today = new Date().toISOString().split('T')[0];
+      console.log('Saving daily checkout with rating:', disciplineRating);
+      
       const result = await dailyCheckinServices.upsertCheckin({
         date: today,
         reflection: checkoutReflection.trim(),
@@ -708,6 +710,7 @@ const AnalystOS = () => {
       });
       
       if (result.success) {
+        console.log('Daily checkout saved successfully with rating:', disciplineRating);
         // Clear form
       setCheckoutReflection('');
       setDisciplineRating(5);
@@ -717,6 +720,7 @@ const AnalystOS = () => {
         
         alert(`Day completed! ${disciplineRating >= 3 ? 'Great job!' : 'Focus better tomorrow.'}`);
       } else {
+        console.error('Error saving checkout:', result.error);
         alert('Error saving checkout: ' + result.error.message);
       }
     }
