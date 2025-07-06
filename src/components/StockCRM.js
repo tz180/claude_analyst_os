@@ -94,6 +94,8 @@ const StockCRM = ({ ticker, onBack }) => {
       title: newNoteTitle,
       content: newNote,
       priceWhenWritten: stockData.price,
+      evToEbitdaWhenWritten: companyData?.evToEbitda,
+      evToRevenueWhenWritten: companyData?.evToRevenue,
       ticker: ticker
     };
     
@@ -411,8 +413,13 @@ const StockCRM = ({ ticker, onBack }) => {
                       />
                     </div>
                     <div className="flex justify-between items-center">
-                      <div className="text-sm text-gray-600">
-                        Current Price: {stockData ? formatCurrency(stockData.price) : 'N/A'}
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div>Current Price: {stockData ? formatCurrency(stockData.price) : 'N/A'}</div>
+                        {companyData && (
+                          <div className="text-xs text-gray-500">
+                            EV/EBITDA: {companyData.evToEbitda || 'N/A'} | EV/Revenue: {companyData.evToRevenue || 'N/A'}
+                          </div>
+                        )}
                       </div>
                       <div className="flex space-x-2">
                         <button 
@@ -449,14 +456,47 @@ const StockCRM = ({ ticker, onBack }) => {
                           </div>
                         </div>
                         <p className="text-sm text-gray-700 mb-2">{note.content}</p>
-                        <div className="flex items-center space-x-4 text-xs text-gray-600">
-                          <span>Price when written: {formatCurrency(note.price_when_written)}</span>
-                          {stockData && (
-                            <span className={`font-medium ${
-                              stockData.price > note.price_when_written ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {stockData.price > note.price_when_written ? '↗' : '↘'} {formatCurrency(Math.abs(stockData.price - note.price_when_written))} ({((Math.abs(stockData.price - note.price_when_written) / note.price_when_written) * 100).toFixed(1)}%)
-                            </span>
+                        <div className="space-y-2">
+                          {/* Price tracking */}
+                          <div className="flex items-center space-x-4 text-xs text-gray-600">
+                            <span>Price when written: {formatCurrency(note.price_when_written)}</span>
+                            {stockData && (
+                              <span className={`font-medium ${
+                                stockData.price > note.price_when_written ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {stockData.price > note.price_when_written ? '↗' : '↘'} {formatCurrency(Math.abs(stockData.price - note.price_when_written))} ({((Math.abs(stockData.price - note.price_when_written) / note.price_when_written) * 100).toFixed(1)}%)
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Valuation metrics tracking */}
+                          {(note.ev_to_ebitda_when_written || note.ev_to_revenue_when_written) && (
+                            <div className="flex items-center space-x-4 text-xs text-gray-600">
+                              {note.ev_to_ebitda_when_written && (
+                                <span>
+                                  EV/EBITDA when written: {parseFloat(note.ev_to_ebitda_when_written).toFixed(2)}
+                                  {companyData?.evToEbitda && (
+                                    <span className={`ml-2 font-medium ${
+                                      parseFloat(companyData.evToEbitda) > parseFloat(note.ev_to_ebitda_when_written) ? 'text-red-600' : 'text-green-600'
+                                    }`}>
+                                      {parseFloat(companyData.evToEbitda) > parseFloat(note.ev_to_ebitda_when_written) ? '↗' : '↘'} {Math.abs(parseFloat(companyData.evToEbitda) - parseFloat(note.ev_to_ebitda_when_written)).toFixed(2)}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              {note.ev_to_revenue_when_written && (
+                                <span>
+                                  EV/Revenue when written: {parseFloat(note.ev_to_revenue_when_written).toFixed(2)}
+                                  {companyData?.evToRevenue && (
+                                    <span className={`ml-2 font-medium ${
+                                      parseFloat(companyData.evToRevenue) > parseFloat(note.ev_to_revenue_when_written) ? 'text-red-600' : 'text-green-600'
+                                    }`}>
+                                      {parseFloat(companyData.evToRevenue) > parseFloat(note.ev_to_revenue_when_written) ? '↗' : '↘'} {Math.abs(parseFloat(companyData.evToRevenue) - parseFloat(note.ev_to_revenue_when_written)).toFixed(2)}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>

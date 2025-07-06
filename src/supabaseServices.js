@@ -788,6 +788,8 @@ export const stockNotesServices = {
         title: noteData.title,
         content: noteData.content,
         price_when_written: noteData.priceWhenWritten,
+        ev_to_ebitda_when_written: noteData.evToEbitdaWhenWritten,
+        ev_to_revenue_when_written: noteData.evToRevenueWhenWritten,
         created_at: new Date().toISOString()
       });
     
