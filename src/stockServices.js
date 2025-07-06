@@ -252,6 +252,7 @@ export const stockServices = {
           sector: data.Sector,
           industry: data.Industry,
           marketCap: data.MarketCapitalization,
+          enterpriseValue: data.MarketCapitalization, // Alpha Vantage doesn't provide EV directly, we'll calculate it
           peRatio: data.PERatio,
           priceToBook: data.PriceToBookRatio,
           dividendYield: data.DividendYield,
@@ -260,7 +261,19 @@ export const stockServices = {
           fiftyTwoWeekHigh: data['52WeekHigh'],
           fiftyTwoWeekLow: data['52WeekLow'],
           fiftyDayAverage: data['50DayMovingAverage'],
-          twoHundredDayAverage: data['200DayMovingAverage']
+          twoHundredDayAverage: data['200DayMovingAverage'],
+          // Additional valuation metrics
+          evToEbitda: data.EVToEBITDA,
+          evToRevenue: data.EVToRevenue,
+          evToEBIT: data.EVToEBIT,
+          enterpriseValue: data.EnterpriseValue,
+          // Financial metrics
+          revenue: data.RevenueTTM,
+          ebitda: data.EBITDA,
+          ebit: data.EBIT,
+          netIncome: data.NetIncomeTTM,
+          totalDebt: data.TotalDebt,
+          cashAndEquivalents: data.CashAndCashEquivalents
         }
       };
     } catch (error) {

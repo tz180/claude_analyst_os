@@ -74,6 +74,19 @@ const StockCRM = ({ ticker, onBack }) => {
     return `${parseFloat(value).toFixed(2)}%`;
   };
 
+  const formatBillions = (value) => {
+    if (!value) return 'N/A';
+    const num = parseFloat(value);
+    if (num >= 1000000000) {
+      return `$${(num / 1000000000).toFixed(2)}B`;
+    } else if (num >= 1000000) {
+      return `$${(num / 1000000).toFixed(2)}M`;
+    } else if (num >= 1000) {
+      return `$${(num / 1000).toFixed(2)}K`;
+    }
+    return formatCurrency(num);
+  };
+
   const saveNote = async () => {
     if (!newNote.trim() || !newNoteTitle.trim() || !stockData) return;
     
@@ -289,7 +302,8 @@ const StockCRM = ({ ticker, onBack }) => {
                 <div>
                   <h4 className="font-medium mb-2">Key Metrics</h4>
                   <div className="space-y-1 text-sm">
-                    <div><span className="text-gray-600">Market Cap:</span> {formatCurrency(companyData.marketCap)}</div>
+                    <div><span className="text-gray-600">Market Cap:</span> {formatBillions(companyData.marketCap)}</div>
+                    <div><span className="text-gray-600">Enterprise Value:</span> {formatBillions(companyData.enterpriseValue)}</div>
                     <div><span className="text-gray-600">P/E Ratio:</span> {companyData.peRatio || 'N/A'}</div>
                     <div><span className="text-gray-600">Beta:</span> {companyData.beta || 'N/A'}</div>
                     <div><span className="text-gray-600">Dividend Yield:</span> {formatPercent(companyData.dividendYield)}</div>
@@ -302,13 +316,24 @@ const StockCRM = ({ ticker, onBack }) => {
           {/* Fundamentals Tab */}
           {activeTab === 'fundamentals' && companyData && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-medium mb-2">Valuation</h4>
                   <div className="space-y-1 text-sm">
+                    <div><span className="text-gray-600">Market Cap:</span> {formatBillions(companyData.marketCap)}</div>
+                    <div><span className="text-gray-600">Enterprise Value:</span> {formatBillions(companyData.enterpriseValue)}</div>
                     <div><span className="text-gray-600">P/E Ratio:</span> {companyData.peRatio || 'N/A'}</div>
                     <div><span className="text-gray-600">P/B Ratio:</span> {companyData.priceToBook || 'N/A'}</div>
                     <div><span className="text-gray-600">EPS:</span> {formatCurrency(companyData.eps)}</div>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">EV Ratios</h4>
+                  <div className="space-y-1 text-sm">
+                    <div><span className="text-gray-600">EV/EBITDA:</span> {companyData.evToEbitda || 'N/A'}</div>
+                    <div><span className="text-gray-600">EV/Revenue:</span> {companyData.evToRevenue || 'N/A'}</div>
+                    <div><span className="text-gray-600">EV/EBIT:</span> {companyData.evToEBIT || 'N/A'}</div>
                   </div>
                 </div>
                 
@@ -319,6 +344,16 @@ const StockCRM = ({ ticker, onBack }) => {
                     <div><span className="text-gray-600">52W Low:</span> {formatCurrency(companyData.fiftyTwoWeekLow)}</div>
                     <div><span className="text-gray-600">50D MA:</span> {formatCurrency(companyData.fiftyDayAverage)}</div>
                     <div><span className="text-gray-600">200D MA:</span> {formatCurrency(companyData.twoHundredDayAverage)}</div>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Financial Metrics</h4>
+                  <div className="space-y-1 text-sm">
+                    <div><span className="text-gray-600">Revenue (TTM):</span> {formatBillions(companyData.revenue)}</div>
+                    <div><span className="text-gray-600">EBITDA:</span> {formatBillions(companyData.ebitda)}</div>
+                    <div><span className="text-gray-600">Net Income:</span> {formatBillions(companyData.netIncome)}</div>
+                    <div><span className="text-gray-600">Total Debt:</span> {formatBillions(companyData.totalDebt)}</div>
                   </div>
                 </div>
                 
