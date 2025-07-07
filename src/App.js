@@ -13,7 +13,6 @@ import Login from './components/Login';
 import { 
   PipelineVelocityCard, 
   CoverageActivityCard, 
-  ProductivityMetricsCard, 
   QuickStatsCard 
 } from './components/Analytics';
 import StockCRM from './components/StockCRM';
@@ -286,7 +285,7 @@ const AnalystOS = () => {
     if (user) {
       loadDataFromSupabase();
     }
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Calculate streak and weekly wins from actual data
   const calculateUserStats = (checkoutHistory) => {
@@ -2052,7 +2051,7 @@ const AnalystOS = () => {
 
 // Main App Component with Authentication
 const AppWithAuth = () => {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (

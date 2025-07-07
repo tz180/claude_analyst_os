@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft, Link, Target, FileText } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft, Target, FileText } from 'lucide-react';
 import { stockServices } from '../stockServices';
 import { analyticsServices, stockNotesServices } from '../supabaseServices';
 
@@ -19,7 +19,7 @@ const StockCRM = ({ ticker, onBack }) => {
     if (ticker) {
       loadStockData();
     }
-  }, [ticker]);
+  }, [ticker]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStockData = async () => {
     setLoading(true);
