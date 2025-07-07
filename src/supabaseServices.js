@@ -777,25 +777,35 @@ export const stockNotesServices = {
 
   // Add a new note
   async addNote(noteData) {
+    console.log('stockNotesServices.addNote called with:', noteData);
+    
     const userId = await getCurrentUserId();
+    console.log('Current user ID:', userId);
+    
     if (!userId) return { success: false, error: 'User not authenticated' };
+
+    const insertData = {
+      user_id: userId,
+      ticker: noteData.ticker,
+      title: noteData.title,
+      content: noteData.content,
+      price_when_written: noteData.priceWhenWritten,
+      ev_to_ebitda_when_written: noteData.evToEbitdaWhenWritten,
+      ev_to_revenue_when_written: noteData.evToRevenueWhenWritten,
+      created_at: new Date().toISOString()
+    };
+    
+    console.log('Inserting note with data:', insertData);
 
     const { data, error } = await supabase
       .from('stock_notes')
-      .insert({
-        user_id: userId,
-        ticker: noteData.ticker,
-        title: noteData.title,
-        content: noteData.content,
-        price_when_written: noteData.priceWhenWritten,
-        ev_to_ebitda_when_written: noteData.evToEbitdaWhenWritten,
-        ev_to_revenue_when_written: noteData.evToRevenueWhenWritten,
-        created_at: new Date().toISOString()
-      });
+      .insert(insertData);
+    
+    console.log('Supabase insert result:', { data, error });
     
     if (error) {
       console.error('Error adding note:', error);
-      return { success: false, error };
+      return { success: false, error: error.message };
     }
     return { success: true, data };
   }

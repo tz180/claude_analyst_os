@@ -88,7 +88,16 @@ const StockCRM = ({ ticker, onBack }) => {
   };
 
   const saveNote = async () => {
-    if (!newNote.trim() || !newNoteTitle.trim() || !stockData) return;
+    console.log('saveNote called with:', { newNote, newNoteTitle, stockData, companyData });
+    
+    if (!newNote.trim() || !newNoteTitle.trim() || !stockData) {
+      console.log('Validation failed:', { 
+        hasNote: !!newNote.trim(), 
+        hasTitle: !!newNoteTitle.trim(), 
+        hasStockData: !!stockData 
+      });
+      return;
+    }
     
     const noteData = {
       title: newNoteTitle,
@@ -99,17 +108,27 @@ const StockCRM = ({ ticker, onBack }) => {
       ticker: ticker
     };
     
-    const result = await stockNotesServices.addNote(noteData);
-    if (result.success) {
-      // Reload notes to get the updated list
-      const notesResult = await stockNotesServices.getNotes(ticker);
-      setNotes(notesResult);
-      setNewNote('');
-      setNewNoteTitle('');
-      setShowNoteForm(false);
-    } else {
-      console.error('Error saving note:', result.error);
-      // You could add a notification here
+    console.log('Saving note with data:', noteData);
+    
+    try {
+      const result = await stockNotesServices.addNote(noteData);
+      console.log('addNote result:', result);
+      
+      if (result.success) {
+        // Reload notes to get the updated list
+        const notesResult = await stockNotesServices.getNotes(ticker);
+        console.log('Reloaded notes:', notesResult);
+        setNotes(notesResult);
+        setNewNote('');
+        setNewNoteTitle('');
+        setShowNoteForm(false);
+      } else {
+        console.error('Error saving note:', result.error);
+        alert(`Error saving note: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Exception in saveNote:', error);
+      alert(`Exception saving note: ${error.message}`);
     }
   };
 
