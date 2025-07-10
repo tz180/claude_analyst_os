@@ -211,6 +211,49 @@ export const stockServices = {
     }
   },
 
+  // Get current stock price (simplified function for portfolio)
+  async getStockPrice(symbol) {
+    if (!ALPHA_VANTAGE_API_KEY) {
+      return null;
+    }
+
+    try {
+      console.log(`Getting stock price for ${symbol}...`);
+      
+      const response = await fetch(
+        `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('getStockPrice response:', data);
+      
+      if (data['Error Message']) {
+        console.error('getStockPrice error:', data['Error Message']);
+        return null;
+      }
+      
+      if (data['Note']) {
+        console.error('getStockPrice rate limit:', data['Note']);
+        return null;
+      }
+      
+      const quote = data['Global Quote'];
+      if (!quote || Object.keys(quote).length === 0) {
+        console.error('No quote data found for:', symbol);
+        return null;
+      }
+      
+      return parseFloat(quote['05. price']);
+    } catch (error) {
+      console.error('Error getting stock price:', error);
+      return null;
+    }
+  },
+
   // Get company overview (fundamentals)
   async getCompanyOverview(symbol) {
     if (!ALPHA_VANTAGE_API_KEY) {
@@ -252,7 +295,7 @@ export const stockServices = {
           sector: data.Sector,
           industry: data.Industry,
           marketCap: data.MarketCapitalization,
-          enterpriseValue: data.MarketCapitalization, // Alpha Vantage doesn't provide EV directly, we'll calculate it
+          enterpriseValue: data.EnterpriseValue || data.MarketCapitalization, // Use EV if available, otherwise use market cap
           peRatio: data.PERatio,
           priceToBook: data.PriceToBookRatio,
           dividendYield: data.DividendYield,
@@ -266,7 +309,6 @@ export const stockServices = {
           evToEbitda: data.EVToEBITDA,
           evToRevenue: data.EVToRevenue,
           evToEBIT: data.EVToEBIT,
-          enterpriseValue: data.EnterpriseValue,
           // Financial metrics
           revenue: data.RevenueTTM,
           ebitda: data.EBITDA,

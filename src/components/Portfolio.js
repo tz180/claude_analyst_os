@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Minus, BarChart3 } from 'lucide-react';
+import { DollarSign, TrendingUp, Plus, Minus, BarChart3 } from 'lucide-react';
 import { portfolioServices } from '../supabaseServices';
-import { getStockPrice } from '../stockServices';
+import { stockServices } from '../stockServices';
 
 const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [currentPrices, setCurrentPrices] = useState({});
@@ -17,7 +17,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
     const loadPrices = async () => {
       const pricePromises = positions.map(async (position) => {
         try {
-          const price = await getStockPrice(position.ticker);
+          const price = await stockServices.getStockPrice(position.ticker);
           return { ticker: position.ticker, price };
         } catch (error) {
           console.error(`Error loading price for ${position.ticker}:`, error);
@@ -43,7 +43,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
     setLoading(true);
     try {
-      const price = await getStockPrice(buyForm.ticker);
+      const price = await stockServices.getStockPrice(buyForm.ticker);
       if (!price) {
         alert('Could not get current price for this stock. Please try again.');
         return;
@@ -76,7 +76,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
     setLoading(true);
     try {
-      const price = await getStockPrice(selectedPosition.ticker);
+      const price = await stockServices.getStockPrice(selectedPosition.ticker);
       if (!price) {
         alert('Could not get current price for this stock. Please try again.');
         return;
