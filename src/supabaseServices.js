@@ -15,6 +15,15 @@ const getCurrentUserId = async () => {
   }
 };
 
+// Helper function to get local date in YYYY-MM-DD format
+const getLocalDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // Temporary: Remove user_id requirement for development
 // This will be restored when we implement proper authentication
 
@@ -25,7 +34,7 @@ export const dailyCheckinServices = {
     const userId = await getCurrentUserId();
     if (!userId) return null;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDate();
     const { data, error } = await supabase
       .from('daily_checkins')
       .select('*')
@@ -225,7 +234,7 @@ export const coverageServices = {
 
   // Update last model date
   async updateLastModel(companyId) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDate();
     const { error } = await supabase
       .from('coverage_universe')
       .update({ last_model_date: today })
@@ -240,7 +249,7 @@ export const coverageServices = {
 
   // Update last memo date
   async updateLastMemo(companyId) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDate();
     const { error } = await supabase
       .from('coverage_universe')
       .update({ last_memo_date: today })
@@ -255,7 +264,7 @@ export const coverageServices = {
 
   // Move to former coverage
   async moveToFormerCoverage(companyId, reason) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDate();
     const { error } = await supabase
       .from('coverage_universe')
       .update({
@@ -350,7 +359,7 @@ export const deliverablesServices = {
   async updateDeliverableStage(deliverableId, stage) {
     const updateData = { stage };
     if (stage === 'completed') {
-      updateData.completed_date = new Date().toISOString().split('T')[0];
+      updateData.completed_date = getLocalDate();
     }
     
     const { error } = await supabase

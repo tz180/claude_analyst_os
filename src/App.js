@@ -232,6 +232,15 @@ const DisciplineEngine = ({
 );
 };
 
+// Helper function to get local date in YYYY-MM-DD format
+const getLocalDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const AnalystOS = () => {
   const { user } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
@@ -298,7 +307,7 @@ const AnalystOS = () => {
       const sortedHistory = [...checkoutHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
       
       let currentStreak = 0;
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDate();
       
       // Check if there's a checkout for today
       const hasToday = sortedHistory.some(entry => entry.date === today);
@@ -311,7 +320,7 @@ const AnalystOS = () => {
         checkDate.setDate(checkDate.getDate() - 1); // Start with yesterday
         
         for (let i = 1; i <= 30; i++) { // Limit to 30 days to prevent infinite loop
-          const checkDateStr = checkDate.toISOString().split('T')[0];
+          const checkDateStr = checkDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format
           const hasEntry = sortedHistory.some(entry => entry.date === checkDateStr);
           
           if (hasEntry) {
@@ -325,7 +334,7 @@ const AnalystOS = () => {
         // If no checkout today, check if there was one yesterday to start counting backwards
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = yesterday.toLocaleDateString('en-CA'); // YYYY-MM-DD format
         
         const hasYesterday = sortedHistory.some(entry => entry.date === yesterdayStr);
         if (hasYesterday) {
@@ -336,7 +345,7 @@ const AnalystOS = () => {
           checkDate.setDate(checkDate.getDate() - 2); // Start with day before yesterday
           
           for (let i = 2; i <= 30; i++) {
-            const checkDateStr = checkDate.toISOString().split('T')[0];
+            const checkDateStr = checkDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format
             const hasEntry = sortedHistory.some(entry => entry.date === checkDateStr);
             
             if (hasEntry) {
@@ -659,7 +668,7 @@ const AnalystOS = () => {
       return '';
     }
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDate();
     const todayEntry = goalsHistory.find(entry => entry.date === today);
     return todayEntry ? todayEntry.goals : '';
   };
@@ -671,7 +680,7 @@ const AnalystOS = () => {
 
   const completeDailyCheckin = async () => {
     if (dailyGoals.trim()) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDate();
       const result = await dailyCheckinServices.upsertCheckin({
         date: today,
         goals: [dailyGoals.trim()],
@@ -700,7 +709,7 @@ const AnalystOS = () => {
 
   const completeDailyCheckout = async () => {
     if (checkoutReflection.trim()) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDate();
       console.log('Saving daily checkout with rating:', disciplineRating);
       
       const result = await dailyCheckinServices.upsertCheckin({
