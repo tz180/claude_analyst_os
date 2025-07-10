@@ -386,6 +386,32 @@ export const deliverablesServices = {
       return { success: false, error };
     }
     return { success: true };
+  },
+
+  // Delete deliverable
+  async deleteDeliverable(deliverableId) {
+    try {
+      console.log('Deleting deliverable:', deliverableId);
+      const userId = await getCurrentUserId();
+      if (!userId) return { success: false, error: 'User not authenticated' };
+
+      const { error } = await supabase
+        .from('deliverables')
+        .delete()
+        .eq('id', deliverableId)
+        .eq('user_id', userId); // Ensure user can only delete their own deliverables
+      
+      if (error) {
+        console.error('Error deleting deliverable:', error);
+        return { success: false, error };
+      }
+      
+      console.log('Deliverable deleted successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('Exception deleting deliverable:', error);
+      return { success: false, error };
+    }
   }
 };
 

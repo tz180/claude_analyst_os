@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3 } from 'lucide-react';
+import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2 } from 'lucide-react';
 import './App.css';
 import { 
   dailyCheckinServices, 
@@ -622,6 +622,20 @@ const AnalystOS = () => {
   const cancelAddMemo = () => {
     setNewMemoTitle('');
     setShowAddMemoModal(false);
+  };
+
+  // Delete deliverable
+  const deleteDeliverable = async (deliverableId) => {
+    if (window.confirm('Are you sure you want to delete this deliverable? This action cannot be undone.')) {
+      const result = await deliverablesServices.deleteDeliverable(deliverableId);
+      if (result.success) {
+        await loadDataFromSupabase(); // Refresh data
+        addNotification('Deliverable deleted successfully', 'success');
+      } else {
+        console.error('Error deleting deliverable:', result.error);
+        addNotification('Error deleting deliverable: ' + result.error, 'error');
+      }
+    }
   };
 
   const addCompany = async () => {
@@ -1751,6 +1765,12 @@ const AnalystOS = () => {
                             className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-red-600">
                             Stall
                         </button>
+                        <button 
+                            onClick={() => deleteDeliverable(memo.id)}
+                            className="bg-gray-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-gray-600 flex items-center">
+                            <Trash2 size={12} className="mr-1" />
+                            Delete
+                        </button>
                         </div>
                       </div>
                     </div>
@@ -1789,6 +1809,15 @@ const AnalystOS = () => {
                             <span>Completed: {memo.completedDate}</span>
                             <span>Worked for {memo.daysWorking} days</span>
                           </div>
+                        </div>
+                        
+                        <div className="flex items-center">
+                          <button 
+                            onClick={() => deleteDeliverable(memo.id)}
+                            className="bg-gray-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-gray-600 flex items-center">
+                            <Trash2 size={12} className="mr-1" />
+                            Delete
+                          </button>
                         </div>
                       </div>
                     </div>
