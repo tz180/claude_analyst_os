@@ -493,6 +493,221 @@ export const pipelineServices = {
   }
 };
 
+// Portfolio Services
+export const portfolioServices = {
+  // Get user's portfolio
+  async getPortfolio() {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+
+    const { data, error } = await supabase
+      .from('portfolios')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching portfolio:', error);
+      return null;
+    }
+    
+    return data;
+  },
+
+  // Create portfolio if it doesn't exist
+  async createPortfolio() {
+    const userId = await getCurrentUserId();
+    if (!userId) return { success: false, error: 'User not authenticated' };
+
+    const { data, error } = await supabase
+      .from('portfolios')
+      .insert({
+        user_id: userId,
+        name: 'My Portfolio'
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating portfolio:', error);
+      return { success: false, error };
+    }
+    
+    return { success: true, data };
+  },
+
+  // Get portfolio positions
+  async getPositions(portfolioId) {
+    if (!portfolioId) return [];
+
+    const { data, error } = await supabase
+      .from('portfolio_positions')
+      .select('*')
+      .eq('portfolio_id', portfolioId)
+      .order('ticker');
+    
+    if (error) {
+      console.error('Error fetching positions:', error);
+      return [];
+    }
+    
+    return data;
+  },
+
+  // Get portfolio transactions
+  async getTransactions(portfolioId) {
+    if (!portfolioId) return [];
+
+    const { data, error } = await supabase
+      .from('portfolio_transactions')
+      .select('*')
+      .eq('portfolio_id', portfolioId)
+      .order('transaction_date', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching transactions:', error);
+      return [];
+    }
+    
+    return data;
+  },
+
+  // Buy shares
+  async buyShares(portfolioId, ticker, shares, pricePerShare, notes = '') {
+    try {
+      console.log('Buying shares:', { portfolioId, ticker, shares, pricePerShare });
+      
+      const totalAmount = shares * pricePerShare;
+      
+      // Start transaction
+      const { data: transaction, error: transactionError } = await supabase
+        .from('portfolio_transactions')
+        .insert({
+          portfolio_id: portfolioId,
+          ticker,
+          transaction_type: 'buy',
+          shares,
+          price_per_share: pricePerShare,
+          total_amount: totalAmount,
+          notes
+        })
+        .select()
+        .single();
+      
+      if (transactionError) throw transactionError;
+
+      // Update or create position
+      const { data: existingPosition } = await supabase
+        .from('portfolio_positions')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .eq('ticker', ticker)
+        .single();
+
+      if (existingPosition) {
+        // Update existing position
+        const newShares = existingPosition.shares + shares;
+        const newAveragePrice = ((existingPosition.shares * existingPosition.average_price) + totalAmount) / newShares;
+        
+        const { error: updateError } = await supabase
+          .from('portfolio_positions')
+          .update({
+            shares: newShares,
+            average_price: newAveragePrice
+          })
+          .eq('id', existingPosition.id);
+        
+        if (updateError) throw updateError;
+      } else {
+        // Create new position
+        const { error: insertError } = await supabase
+          .from('portfolio_positions')
+          .insert({
+            portfolio_id: portfolioId,
+            ticker,
+            shares,
+            average_price: pricePerShare
+          });
+        
+        if (insertError) throw insertError;
+      }
+
+      console.log('Buy transaction completed successfully');
+      return { success: true, data: transaction };
+    } catch (error) {
+      console.error('Error buying shares:', error);
+      return { success: false, error };
+    }
+  },
+
+  // Sell shares
+  async sellShares(portfolioId, ticker, shares, pricePerShare, notes = '') {
+    try {
+      console.log('Selling shares:', { portfolioId, ticker, shares, pricePerShare });
+      
+      const totalAmount = shares * pricePerShare;
+      
+      // Check if we have enough shares
+      const { data: position } = await supabase
+        .from('portfolio_positions')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .eq('ticker', ticker)
+        .single();
+      
+      if (!position || position.shares < shares) {
+        return { success: false, error: 'Insufficient shares to sell' };
+      }
+
+      // Record transaction
+      const { data: transaction, error: transactionError } = await supabase
+        .from('portfolio_transactions')
+        .insert({
+          portfolio_id: portfolioId,
+          ticker,
+          transaction_type: 'sell',
+          shares,
+          price_per_share: pricePerShare,
+          total_amount: totalAmount,
+          notes
+        })
+        .select()
+        .single();
+      
+      if (transactionError) throw transactionError;
+
+      // Update position
+      const remainingShares = position.shares - shares;
+      
+      if (remainingShares === 0) {
+        // Delete position if no shares remaining
+        const { error: deleteError } = await supabase
+          .from('portfolio_positions')
+          .delete()
+          .eq('id', position.id);
+        
+        if (deleteError) throw deleteError;
+      } else {
+        // Update position with remaining shares
+        const { error: updateError } = await supabase
+          .from('portfolio_positions')
+          .update({
+            shares: remainingShares
+          })
+          .eq('id', position.id);
+        
+        if (updateError) throw updateError;
+      }
+
+      console.log('Sell transaction completed successfully');
+      return { success: true, data: transaction };
+    } catch (error) {
+      console.error('Error selling shares:', error);
+      return { success: false, error };
+    }
+  }
+};
+
 // Analytics Services
 export const analyticsServices = {
   // Calculate pipeline velocity metrics

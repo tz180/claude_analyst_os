@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2 } from 'lucide-react';
+import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, DollarSign } from 'lucide-react';
 import './App.css';
 import { 
   dailyCheckinServices, 
   coverageServices, 
   deliverablesServices, 
-  pipelineServices,
-  analyticsServices 
+  pipelineServices, 
+  analyticsServices,
+  portfolioServices
 } from './supabaseServices';
 import { AuthProvider, useAuth } from './AuthContext';
 import Login from './components/Login';
@@ -16,6 +17,7 @@ import {
   QuickStatsCard 
 } from './components/Analytics';
 import StockCRM from './components/StockCRM';
+import Portfolio from './components/Portfolio';
 
 // ✅ MOVE TEXT INPUT COMPONENTS OUTSIDE - This prevents recreation
 const DisciplineEngine = ({ 
@@ -288,6 +290,11 @@ const AnalystOS = () => {
 
   // Add company error state
   const [addCompanyError, setAddCompanyError] = useState('');
+  
+  // Portfolio state
+  const [portfolio, setPortfolio] = useState(null);
+  const [positions, setPositions] = useState([]);
+  const [transactions, setTransactions] = useState([]);
 
   // Load data from Supabase on component mount
   useEffect(() => {
@@ -386,14 +393,16 @@ const AnalystOS = () => {
         activeCoverageData,
         formerCoverageData,
         deliverablesData,
-        pipelineIdeasData
+        pipelineIdeasData,
+        portfolioData
       ] = await Promise.allSettled([
         dailyCheckinServices.getCheckoutHistory(),
         dailyCheckinServices.getGoalsHistory(),
         coverageServices.getActiveCoverage(),
         coverageServices.getFormerCoverage(),
         deliverablesServices.getDeliverables(),
-        pipelineServices.getPipelineIdeas()
+        pipelineServices.getPipelineIdeas(),
+        portfolioServices.getPortfolio()
       ]);
 
       console.log('Promise.allSettled results:', {
@@ -411,6 +420,7 @@ const AnalystOS = () => {
       const formerCoverageResult = formerCoverageData.status === 'fulfilled' ? formerCoverageData.value : [];
       const deliverablesResult = deliverablesData.status === 'fulfilled' ? deliverablesData.value : [];
       const pipelineIdeasResult = pipelineIdeasData.status === 'fulfilled' ? pipelineIdeasData.value : [];
+      const portfolioResult = portfolioData.status === 'fulfilled' ? portfolioData.value : null;
 
       // Simple logging for debugging
       if (checkoutHistoryData.status === 'rejected') {
@@ -432,6 +442,27 @@ const AnalystOS = () => {
       setMemos(deliverablesResult.filter(d => d.stage !== 'completed'));
       setCompletedMemos(deliverablesResult.filter(d => d.stage === 'completed'));
       setPipelineIdeas(pipelineIdeasResult);
+      
+      // Handle portfolio data
+      if (portfolioResult) {
+        setPortfolio(portfolioResult);
+        // Load positions and transactions for the portfolio
+        const [positionsData, transactionsData] = await Promise.allSettled([
+          portfolioServices.getPositions(portfolioResult.id),
+          portfolioServices.getTransactions(portfolioResult.id)
+        ]);
+        
+        setPositions(positionsData.status === 'fulfilled' ? positionsData.value : []);
+        setTransactions(transactionsData.status === 'fulfilled' ? transactionsData.value : []);
+      } else {
+        // Create portfolio if it doesn't exist
+        const createResult = await portfolioServices.createPortfolio();
+        if (createResult.success) {
+          setPortfolio(createResult.data);
+          setPositions([]);
+          setTransactions([]);
+        }
+      }
 
       // Calculate user stats from checkout history
       console.log('Calculating user stats with checkout history:', checkoutHistoryResult);
@@ -848,6 +879,16 @@ const AnalystOS = () => {
                   }`}
                 >
                   Stock CRM
+                </button>
+                <button
+                  onClick={() => setCurrentView('portfolio')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentView === 'portfolio'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Portfolio
                 </button>
         </div>
       </div>
@@ -1958,6 +1999,15 @@ const AnalystOS = () => {
               </div>
             </div>
           </div>
+        );
+      case 'portfolio':
+        return (
+          <Portfolio 
+            portfolio={portfolio}
+            positions={positions}
+            transactions={transactions}
+            onRefresh={loadDataFromSupabase}
+          />
         );
       default:
         // Check if it's a stock CRM page (format: stock-crm-TICKER)
