@@ -11,6 +11,8 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [buyForm, setBuyForm] = useState({ ticker: '', shares: '', notes: '' });
   const [sellForm, setSellForm] = useState({ shares: '', notes: '' });
   const [loading, setLoading] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState(null);
+  const [priceLoading, setPriceLoading] = useState(false);
 
   // Load current prices for all positions
   useEffect(() => {
@@ -65,6 +67,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
       if (result.success) {
         setBuyForm({ ticker: '', shares: '', notes: '' });
+        setCurrentPrice(null);
         setShowBuyModal(false);
         onRefresh();
       } else {
@@ -155,6 +158,42 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
   const formatPercentage = (value) => {
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+  };
+
+  // Fetch current price for a ticker
+  const fetchCurrentPrice = async (ticker) => {
+    if (!ticker || ticker.length < 1) {
+      setCurrentPrice(null);
+      return;
+    }
+
+    setPriceLoading(true);
+    try {
+      const price = await stockServices.getStockPrice(ticker.toUpperCase());
+      setCurrentPrice(price);
+    } catch (error) {
+      console.error('Error fetching price:', error);
+      setCurrentPrice(null);
+    } finally {
+      setPriceLoading(false);
+    }
+  };
+
+  // Calculate total cost and portfolio percentage
+  const calculatePurchaseDetails = () => {
+    if (!currentPrice || !buyForm.shares || !portfolio) return null;
+    
+    const shares = parseFloat(buyForm.shares);
+    const totalCost = shares * currentPrice;
+    const portfolioValue = calculateTotalValue();
+    const percentage = (totalCost / portfolioValue) * 100;
+    
+    return {
+      totalCost,
+      percentage,
+      shares,
+      price: currentPrice
+    };
   };
 
   return (
@@ -367,13 +406,28 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Ticker</label>
-                <input
-                  type="text"
-                  value={buyForm.ticker}
-                  onChange={(e) => setBuyForm({ ...buyForm, ticker: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md"
-                  placeholder="e.g., AAPL"
-                />
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={buyForm.ticker}
+                    onChange={(e) => {
+                      setBuyForm({ ...buyForm, ticker: e.target.value });
+                      fetchCurrentPrice(e.target.value);
+                    }}
+                    className="flex-1 px-3 py-2 border rounded-md"
+                    placeholder="e.g., AAPL"
+                  />
+                  {priceLoading && (
+                    <div className="flex items-center px-3">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    </div>
+                  )}
+                </div>
+                {currentPrice && (
+                  <p className="text-sm text-green-600 mt-1">
+                    Current Price: {formatCurrency(currentPrice)}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -388,6 +442,29 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                   min="0.01"
                 />
               </div>
+
+              {/* Purchase Details */}
+              {calculatePurchaseDetails() && (
+                <div className="p-3 bg-blue-50 rounded-md">
+                  <h4 className="font-medium text-blue-900 mb-2">Purchase Details</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Total Cost:</span>
+                      <span className="font-semibold">{formatCurrency(calculatePurchaseDetails().totalCost)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Portfolio %:</span>
+                      <span className="font-semibold">{calculatePurchaseDetails().percentage.toFixed(2)}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Remaining Cash:</span>
+                      <span className={`font-semibold ${(portfolio?.current_cash || 0) - calculatePurchaseDetails().totalCost >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency((portfolio?.current_cash || 0) - calculatePurchaseDetails().totalCost)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
@@ -403,7 +480,11 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
             
             <div className="flex space-x-3 mt-6">
               <button
-                onClick={() => setShowBuyModal(false)}
+                onClick={() => {
+                  setShowBuyModal(false);
+                  setCurrentPrice(null);
+                  setBuyForm({ ticker: '', shares: '', notes: '' });
+                }}
                 className="flex-1 px-4 py-2 border rounded-md hover:bg-gray-50"
                 disabled={loading}
               >
@@ -412,7 +493,8 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
               <button
                 onClick={handleBuy}
                 className="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50"
-                disabled={loading || !buyForm.ticker || !buyForm.shares}
+                disabled={loading || !buyForm.ticker || !buyForm.shares || 
+                  (calculatePurchaseDetails() && calculatePurchaseDetails().totalCost > (portfolio?.current_cash || 0))}
               >
                 {loading ? 'Buying...' : 'Buy'}
               </button>
