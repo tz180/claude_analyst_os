@@ -97,6 +97,8 @@ CREATE TABLE IF NOT EXISTS portfolios (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL DEFAULT 'My Portfolio',
+  starting_cash DECIMAL(15,2) NOT NULL DEFAULT 50000000.00, -- $50 million starting cash
+  current_cash DECIMAL(15,2) NOT NULL DEFAULT 50000000.00, -- Current available cash
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

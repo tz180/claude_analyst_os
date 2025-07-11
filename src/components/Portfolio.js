@@ -49,6 +49,12 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
         return;
       }
 
+      const totalCost = parseFloat(buyForm.shares) * price;
+      if (totalCost > (portfolio?.current_cash || 0)) {
+        alert(`Insufficient cash. You need ${formatCurrency(totalCost)} but only have ${formatCurrency(portfolio?.current_cash || 0)} available.`);
+        return;
+      }
+
       const result = await portfolioServices.buyShares(
         portfolio.id,
         buyForm.ticker.toUpperCase(),
@@ -119,17 +125,25 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   };
 
   const calculateTotalValue = () => {
-    return positions.reduce((total, position) => {
+    const positionsValue = positions.reduce((total, position) => {
       const value = calculatePositionValue(position);
       return total + (value || 0);
     }, 0);
+    return positionsValue + (portfolio?.current_cash || 0);
   };
 
   const calculateTotalGainLoss = () => {
-    return positions.reduce((total, position) => {
+    const positionsGainLoss = positions.reduce((total, position) => {
       const gainLoss = calculatePositionGainLoss(position);
       return total + (gainLoss || 0);
     }, 0);
+    return positionsGainLoss;
+  };
+
+  const calculateTotalReturn = () => {
+    const totalValue = calculateTotalValue();
+    const startingValue = portfolio?.starting_cash || 50000000;
+    return ((totalValue - startingValue) / startingValue) * 100;
   };
 
   const formatCurrency = (amount) => {
@@ -158,7 +172,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">
             <div className="flex items-center">
               <DollarSign className="text-blue-600 mr-2" size={20} />
@@ -181,6 +195,16 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
             </div>
           </div>
 
+          <div className="bg-yellow-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <DollarSign className="text-yellow-600 mr-2" size={20} />
+              <div>
+                <p className="text-sm text-gray-600">Available Cash</p>
+                <p className="text-lg font-semibold">{formatCurrency(portfolio?.current_cash || 0)}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-purple-50 p-4 rounded-lg">
             <div className="flex items-center">
               <BarChart3 className="text-purple-600 mr-2" size={20} />
@@ -188,6 +212,28 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                 <p className="text-sm text-gray-600">Positions</p>
                 <p className="text-lg font-semibold">{positions.length}</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Performance Summary */}
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="text-center">
+              <p className="text-gray-600">Starting Value</p>
+              <p className="font-semibold">{formatCurrency(portfolio?.starting_cash || 50000000)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-gray-600">Total Return</p>
+              <p className={`font-semibold ${calculateTotalReturn() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatPercentage(calculateTotalReturn())}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-gray-600">Portfolio Return</p>
+              <p className={`font-semibold ${calculateTotalGainLoss() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(calculateTotalGainLoss())}
+              </p>
             </div>
           </div>
         </div>
@@ -313,6 +359,12 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
             <h3 className="text-lg font-semibold mb-4">Buy Stock</h3>
             
             <div className="space-y-4">
+              <div className="mb-4 p-3 bg-blue-50 rounded-md">
+                <p className="text-sm text-blue-800">
+                  Available Cash: <span className="font-semibold">{formatCurrency(portfolio?.current_cash || 0)}</span>
+                </p>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Ticker</label>
                 <input

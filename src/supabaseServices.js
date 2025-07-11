@@ -523,7 +523,9 @@ export const portfolioServices = {
       .from('portfolios')
       .insert({
         user_id: userId,
-        name: 'My Portfolio'
+        name: 'My Portfolio',
+        starting_cash: 50000000.00, // $50 million
+        current_cash: 50000000.00
       })
       .select()
       .single();
@@ -579,6 +581,21 @@ export const portfolioServices = {
       
       const totalAmount = shares * pricePerShare;
       
+      // Check if we have enough cash
+      const { data: portfolio } = await supabase
+        .from('portfolios')
+        .select('current_cash')
+        .eq('id', portfolioId)
+        .single();
+      
+      if (!portfolio) {
+        return { success: false, error: 'Portfolio not found' };
+      }
+      
+      if (portfolio.current_cash < totalAmount) {
+        return { success: false, error: 'Insufficient cash to complete purchase' };
+      }
+      
       // Start transaction
       const { data: transaction, error: transactionError } = await supabase
         .from('portfolio_transactions')
@@ -631,6 +648,15 @@ export const portfolioServices = {
         
         if (insertError) throw insertError;
       }
+
+      // Update cash balance
+      const newCashBalance = portfolio.current_cash - totalAmount;
+      const { error: cashUpdateError } = await supabase
+        .from('portfolios')
+        .update({ current_cash: newCashBalance })
+        .eq('id', portfolioId);
+      
+      if (cashUpdateError) throw cashUpdateError;
 
       console.log('Buy transaction completed successfully');
       return { success: true, data: transaction };
@@ -697,6 +723,23 @@ export const portfolioServices = {
           .eq('id', position.id);
         
         if (updateError) throw updateError;
+      }
+
+      // Add cash back to portfolio
+      const { data: portfolio } = await supabase
+        .from('portfolios')
+        .select('current_cash')
+        .eq('id', portfolioId)
+        .single();
+      
+      if (portfolio) {
+        const newCashBalance = portfolio.current_cash + totalAmount;
+        const { error: cashUpdateError } = await supabase
+          .from('portfolios')
+          .update({ current_cash: newCashBalance })
+          .eq('id', portfolioId);
+        
+        if (cashUpdateError) throw cashUpdateError;
       }
 
       console.log('Sell transaction completed successfully');
