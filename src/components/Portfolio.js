@@ -14,6 +14,9 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
 
+  // Debug logging for props
+  console.log('Portfolio component props:', { portfolio, positions, transactions, onRefresh: typeof onRefresh });
+
   // Load current prices for all positions
   useEffect(() => {
     const loadPrices = async () => {
@@ -41,21 +44,44 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   }, [positions]);
 
   const handleBuy = async () => {
-    if (!buyForm.ticker || !buyForm.shares) return;
+    console.log('=== BUY BUTTON CLICKED ===');
+    console.log('buyForm:', buyForm);
+    console.log('portfolio:', portfolio);
+    
+    if (!buyForm.ticker || !buyForm.shares) {
+      console.log('Missing ticker or shares');
+      return;
+    }
 
     setLoading(true);
     try {
+      console.log('Fetching stock price for:', buyForm.ticker);
       const price = await stockServices.getStockPrice(buyForm.ticker);
+      console.log('Stock price result:', price);
+      
       if (!price) {
+        console.log('No price returned from API');
         alert('Could not get current price for this stock. Please try again.');
         return;
       }
 
       const totalCost = parseFloat(buyForm.shares) * price;
+      console.log('Total cost calculation:', { shares: buyForm.shares, price, totalCost });
+      console.log('Available cash:', portfolio?.current_cash);
+      
       if (totalCost > (portfolio?.current_cash || 0)) {
+        console.log('Insufficient cash');
         alert(`Insufficient cash. You need ${formatCurrency(totalCost)} but only have ${formatCurrency(portfolio?.current_cash || 0)} available.`);
         return;
       }
+
+      console.log('Calling buyShares with:', {
+        portfolioId: portfolio.id,
+        ticker: buyForm.ticker.toUpperCase(),
+        shares: parseFloat(buyForm.shares),
+        price,
+        notes: buyForm.notes
+      });
 
       const result = await portfolioServices.buyShares(
         portfolio.id,
@@ -65,15 +91,22 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
         buyForm.notes
       );
 
+      console.log('buyShares result:', result);
+
       if (result.success) {
+        console.log('Buy successful, updating UI');
         setBuyForm({ ticker: '', shares: '', notes: '' });
         setCurrentPrice(null);
         setShowBuyModal(false);
-        onRefresh();
+        console.log('Calling onRefresh function...');
+        await onRefresh();
+        console.log('onRefresh completed');
       } else {
+        console.log('Buy failed:', result.error);
         alert('Error buying shares: ' + result.error);
       }
     } catch (error) {
+      console.error('Error in handleBuy:', error);
       alert('Error: ' + error.message);
     } finally {
       setLoading(false);

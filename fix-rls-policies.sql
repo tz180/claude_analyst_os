@@ -43,5 +43,76 @@ CREATE POLICY "Allow all notes" ON crm_notes
 CREATE POLICY "Allow all pipeline ideas" ON pipeline_ideas
     FOR ALL USING (true);
 
+-- Fix RLS Policies for Portfolio Tables
+-- These policies were missing from the original schema
+
+-- Portfolio RLS Policies
+CREATE POLICY "Users can view own portfolio" ON portfolios
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own portfolio" ON portfolios
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own portfolio" ON portfolios
+    FOR UPDATE USING (auth.uid() = user_id);
+
+-- Portfolio Positions RLS Policies
+CREATE POLICY "Users can view own portfolio positions" ON portfolio_positions
+    FOR SELECT USING (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can insert own portfolio positions" ON portfolio_positions
+    FOR INSERT WITH CHECK (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can update own portfolio positions" ON portfolio_positions
+    FOR UPDATE USING (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can delete own portfolio positions" ON portfolio_positions
+    FOR DELETE USING (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
+-- Portfolio Transactions RLS Policies
+CREATE POLICY "Users can view own portfolio transactions" ON portfolio_transactions
+    FOR SELECT USING (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can insert own portfolio transactions" ON portfolio_transactions
+    FOR INSERT WITH CHECK (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can update own portfolio transactions" ON portfolio_transactions
+    FOR UPDATE USING (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can delete own portfolio transactions" ON portfolio_transactions
+    FOR DELETE USING (
+        portfolio_id IN (
+            SELECT id FROM portfolios WHERE user_id = auth.uid()
+        )
+    );
+
 -- Note: This removes security for development. 
 -- When you implement authentication, you should revert to user-specific policies. 
