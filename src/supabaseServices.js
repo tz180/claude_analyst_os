@@ -497,106 +497,172 @@ export const pipelineServices = {
 export const portfolioServices = {
   // Get user's portfolio
   async getPortfolio() {
-    const userId = await getCurrentUserId();
-    if (!userId) return null;
+    try {
+      console.log('=== getPortfolio FUNCTION START ===');
+      const userId = await getCurrentUserId();
+      console.log('Current user ID:', userId);
+      
+      if (!userId) {
+        console.error('No user ID found');
+        return null;
+      }
 
-    const { data, error } = await supabase
-      .from('portfolios')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching portfolio:', error);
+      const { data, error } = await supabase
+        .from('portfolios')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      console.log('Portfolio query result:', { data, error });
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error fetching portfolio:', error);
+        return null;
+      }
+      
+      console.log('=== getPortfolio FUNCTION SUCCESS ===');
+      return data;
+    } catch (error) {
+      console.error('=== getPortfolio FUNCTION ERROR ===');
+      console.error('Error in getPortfolio:', error);
       return null;
     }
-    
-    return data;
   },
 
-  // Create portfolio if it doesn't exist
+  // Create portfolio for user
   async createPortfolio() {
-    const userId = await getCurrentUserId();
-    if (!userId) return { success: false, error: 'User not authenticated' };
+    try {
+      console.log('=== createPortfolio FUNCTION START ===');
+      const userId = await getCurrentUserId();
+      console.log('Current user ID:', userId);
+      
+      if (!userId) {
+        console.error('No user ID found');
+        return { success: false, error: 'User not authenticated' };
+      }
 
-    const { data, error } = await supabase
-      .from('portfolios')
-      .insert({
-        user_id: userId,
-        name: 'My Portfolio',
-        starting_cash: 50000000.00, // $50 million
-        current_cash: 50000000.00
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating portfolio:', error);
+      const { data, error } = await supabase
+        .from('portfolios')
+        .insert({
+          user_id: userId,
+          name: 'My Portfolio',
+          starting_cash: 50000000.00,
+          current_cash: 50000000.00
+        })
+        .select()
+        .single();
+      
+      console.log('Create portfolio result:', { data, error });
+      
+      if (error) {
+        console.error('Error creating portfolio:', error);
+        return { success: false, error };
+      }
+      
+      console.log('=== createPortfolio FUNCTION SUCCESS ===');
+      return { success: true, data };
+    } catch (error) {
+      console.error('=== createPortfolio FUNCTION ERROR ===');
+      console.error('Error in createPortfolio:', error);
       return { success: false, error };
     }
-    
-    return { success: true, data };
   },
 
-  // Get portfolio positions
+  // Get positions for a portfolio
   async getPositions(portfolioId) {
-    if (!portfolioId) return [];
-
-    const { data, error } = await supabase
-      .from('portfolio_positions')
-      .select('*')
-      .eq('portfolio_id', portfolioId)
-      .order('ticker');
-    
-    if (error) {
-      console.error('Error fetching positions:', error);
+    try {
+      console.log('=== getPositions FUNCTION START ===');
+      console.log('Portfolio ID:', portfolioId);
+      
+      const { data, error } = await supabase
+        .from('portfolio_positions')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .order('ticker');
+      
+      console.log('Positions query result:', { data, error });
+      
+      if (error) {
+        console.error('Error fetching positions:', error);
+        return [];
+      }
+      
+      console.log('=== getPositions FUNCTION SUCCESS ===');
+      return data || [];
+    } catch (error) {
+      console.error('=== getPositions FUNCTION ERROR ===');
+      console.error('Error in getPositions:', error);
       return [];
     }
-    
-    return data;
   },
 
-  // Get portfolio transactions
+  // Get transactions for a portfolio
   async getTransactions(portfolioId) {
-    if (!portfolioId) return [];
-
-    const { data, error } = await supabase
-      .from('portfolio_transactions')
-      .select('*')
-      .eq('portfolio_id', portfolioId)
-      .order('transaction_date', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching transactions:', error);
+    try {
+      console.log('=== getTransactions FUNCTION START ===');
+      console.log('Portfolio ID:', portfolioId);
+      
+      const { data, error } = await supabase
+        .from('portfolio_transactions')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .order('transaction_date', { ascending: false });
+      
+      console.log('Transactions query result:', { data, error });
+      
+      if (error) {
+        console.error('Error fetching transactions:', error);
+        return [];
+      }
+      
+      console.log('=== getTransactions FUNCTION SUCCESS ===');
+      return data || [];
+    } catch (error) {
+      console.error('=== getTransactions FUNCTION ERROR ===');
+      console.error('Error in getTransactions:', error);
       return [];
     }
-    
-    return data;
   },
 
   // Buy shares
   async buyShares(portfolioId, ticker, shares, pricePerShare, notes = '') {
     try {
-      console.log('Buying shares:', { portfolioId, ticker, shares, pricePerShare });
+      console.log('=== buyShares FUNCTION START ===');
+      console.log('Parameters:', { portfolioId, ticker, shares, pricePerShare, notes });
       
       const totalAmount = shares * pricePerShare;
+      console.log('Total amount calculated:', totalAmount);
       
       // Check if we have enough cash
-      const { data: portfolio } = await supabase
+      console.log('Checking portfolio cash...');
+      const { data: portfolio, error: portfolioError } = await supabase
         .from('portfolios')
         .select('current_cash')
         .eq('id', portfolioId)
         .single();
       
+      console.log('Portfolio query result:', { portfolio, error: portfolioError });
+      
+      if (portfolioError) {
+        console.error('Error fetching portfolio:', portfolioError);
+        return { success: false, error: 'Error fetching portfolio: ' + portfolioError.message };
+      }
+      
       if (!portfolio) {
+        console.error('Portfolio not found');
         return { success: false, error: 'Portfolio not found' };
       }
       
+      console.log('Current cash:', portfolio.current_cash);
+      console.log('Required amount:', totalAmount);
+      
       if (portfolio.current_cash < totalAmount) {
+        console.error('Insufficient cash');
         return { success: false, error: 'Insufficient cash to complete purchase' };
       }
       
       // Start transaction
+      console.log('Inserting transaction record...');
       const { data: transaction, error: transactionError } = await supabase
         .from('portfolio_transactions')
         .insert({
@@ -611,20 +677,31 @@ export const portfolioServices = {
         .select()
         .single();
       
-      if (transactionError) throw transactionError;
+      console.log('Transaction insert result:', { transaction, error: transactionError });
+      
+      if (transactionError) {
+        console.error('Transaction insert error:', transactionError);
+        throw transactionError;
+      }
 
       // Update or create position
-      const { data: existingPosition } = await supabase
+      console.log('Checking existing position...');
+      const { data: existingPosition, error: positionQueryError } = await supabase
         .from('portfolio_positions')
         .select('*')
         .eq('portfolio_id', portfolioId)
         .eq('ticker', ticker)
         .single();
 
+      console.log('Position query result:', { existingPosition, error: positionQueryError });
+
       if (existingPosition) {
         // Update existing position
+        console.log('Updating existing position...');
         const newShares = existingPosition.shares + shares;
         const newAveragePrice = ((existingPosition.shares * existingPosition.average_price) + totalAmount) / newShares;
+        
+        console.log('New position values:', { newShares, newAveragePrice });
         
         const { error: updateError } = await supabase
           .from('portfolio_positions')
@@ -634,9 +711,15 @@ export const portfolioServices = {
           })
           .eq('id', existingPosition.id);
         
-        if (updateError) throw updateError;
+        console.log('Position update result:', { error: updateError });
+        
+        if (updateError) {
+          console.error('Position update error:', updateError);
+          throw updateError;
+        }
       } else {
         // Create new position
+        console.log('Creating new position...');
         const { error: insertError } = await supabase
           .from('portfolio_positions')
           .insert({
@@ -646,21 +729,35 @@ export const portfolioServices = {
             average_price: pricePerShare
           });
         
-        if (insertError) throw insertError;
+        console.log('Position insert result:', { error: insertError });
+        
+        if (insertError) {
+          console.error('Position insert error:', insertError);
+          throw insertError;
+        }
       }
 
       // Update cash balance
+      console.log('Updating cash balance...');
       const newCashBalance = portfolio.current_cash - totalAmount;
+      console.log('New cash balance:', newCashBalance);
+      
       const { error: cashUpdateError } = await supabase
         .from('portfolios')
         .update({ current_cash: newCashBalance })
         .eq('id', portfolioId);
       
-      if (cashUpdateError) throw cashUpdateError;
+      console.log('Cash update result:', { error: cashUpdateError });
+      
+      if (cashUpdateError) {
+        console.error('Cash update error:', cashUpdateError);
+        throw cashUpdateError;
+      }
 
-      console.log('Buy transaction completed successfully');
+      console.log('=== buyShares FUNCTION SUCCESS ===');
       return { success: true, data: transaction };
     } catch (error) {
+      console.error('=== buyShares FUNCTION ERROR ===');
       console.error('Error buying shares:', error);
       return { success: false, error };
     }
