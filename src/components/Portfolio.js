@@ -248,6 +248,28 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
               Test DB Access
             </button>
             <button
+              onClick={() => {
+                console.log('Current portfolio data:', portfolio);
+                console.log('Current positions:', positions);
+                console.log('Current transactions:', transactions);
+                alert('Check console for current data');
+              }}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+            >
+              Show Data
+            </button>
+            <button
+              onClick={async () => {
+                console.log('Force refreshing portfolio data...');
+                await onRefresh();
+                console.log('Refresh completed');
+                alert('Portfolio data refreshed');
+              }}
+              className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 transition-colors"
+            >
+              Force Refresh
+            </button>
+            <button
               onClick={() => setShowBuyModal(true)}
               className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors flex items-center"
             >
