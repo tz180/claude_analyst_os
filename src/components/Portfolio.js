@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Plus, Minus, BarChart3 } from 'lucide-react';
-import { portfolioServices, testPortfolioAccess, cleanupPortfolios } from '../supabaseServices';
+import { DollarSign, TrendingUp, Plus, BarChart3 } from 'lucide-react';
+import { portfolioServices } from '../supabaseServices';
 import { stockServices } from '../stockServices';
 
 const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [currentPrices, setCurrentPrices] = useState({});
+  const [priceChanges, setPriceChanges] = useState({});
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState(null);
@@ -13,75 +14,82 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
-
-  // Debug logging for props
-  console.log('Portfolio component props:', { portfolio, positions, transactions, onRefresh: typeof onRefresh });
+  const [pricesLoading, setPricesLoading] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   // Load current prices for all positions
   useEffect(() => {
     const loadPrices = async () => {
-      const pricePromises = positions.map(async (position) => {
-        try {
-          const price = await stockServices.getStockPrice(position.ticker);
-          return { ticker: position.ticker, price };
-        } catch (error) {
-          console.error(`Error loading price for ${position.ticker}:`, error);
-          return { ticker: position.ticker, price: null };
-        }
-      });
+      if (positions.length === 0) return;
+      
+      setPricesLoading(true);
+      try {
+        const pricePromises = positions.map(async (position) => {
+          try {
+            const priceData = await stockServices.getStockPrice(position.ticker);
+            
+            // If no price data, use the average price as fallback
+            const fallbackPrice = priceData?.price || position.average_price;
+            const fallbackChange = priceData?.change || 0;
+            const fallbackChangePercent = priceData?.changePercent || 0;
+            
+            return { 
+              ticker: position.ticker, 
+              price: fallbackPrice,
+              change: fallbackChange,
+              changePercent: fallbackChangePercent
+            };
+          } catch (error) {
+            console.error(`Error loading price for ${position.ticker}:`, error);
+            // Use average price as fallback
+            return { 
+              ticker: position.ticker, 
+              price: position.average_price, 
+              change: 0, 
+              changePercent: 0 
+            };
+          }
+        });
 
-      const prices = await Promise.all(pricePromises);
-      const priceMap = {};
-      prices.forEach(({ ticker, price }) => {
-        priceMap[ticker] = price;
-      });
-      setCurrentPrices(priceMap);
+        const prices = await Promise.all(pricePromises);
+        const priceMap = {};
+        const changeMap = {};
+        prices.forEach(({ ticker, price, change, changePercent }) => {
+          priceMap[ticker] = price;
+          changeMap[ticker] = { change, changePercent };
+        });
+        setCurrentPrices(priceMap);
+        setPriceChanges(changeMap);
+      } finally {
+        setPricesLoading(false);
+      }
     };
 
-    if (positions.length > 0) {
-      loadPrices();
-    }
+    loadPrices();
   }, [positions]);
 
   const handleBuy = async () => {
-    console.log('=== BUY BUTTON CLICKED ===');
-    console.log('buyForm:', buyForm);
-    console.log('portfolio:', portfolio);
-    
     if (!buyForm.ticker || !buyForm.shares) {
-      console.log('Missing ticker or shares');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('Fetching stock price for:', buyForm.ticker);
-      const price = await stockServices.getStockPrice(buyForm.ticker);
-      console.log('Stock price result:', price);
+      const priceData = await stockServices.getStockPrice(buyForm.ticker);
       
-      if (!price) {
-        console.log('No price returned from API');
+      if (!priceData || !priceData.price) {
         alert('Could not get current price for this stock. Please try again.');
         return;
       }
 
+      const price = priceData.price;
       const totalCost = parseFloat(buyForm.shares) * price;
-      console.log('Total cost calculation:', { shares: buyForm.shares, price, totalCost });
-      console.log('Available cash:', portfolio?.current_cash);
+      const availableCash = calculateAvailableCash();
       
-      if (totalCost > (portfolio?.current_cash || 0)) {
-        console.log('Insufficient cash');
-        alert(`Insufficient cash. You need ${formatCurrency(totalCost)} but only have ${formatCurrency(portfolio?.current_cash || 0)} available.`);
+      if (totalCost > availableCash) {
+        alert(`Insufficient cash. You need ${formatCurrency(totalCost)} but only have ${formatCurrency(availableCash)} available.`);
         return;
       }
-
-      console.log('Calling buyShares with:', {
-        portfolioId: portfolio.id,
-        ticker: buyForm.ticker.toUpperCase(),
-        shares: parseFloat(buyForm.shares),
-        price,
-        notes: buyForm.notes
-      });
 
       const result = await portfolioServices.buyShares(
         portfolio.id,
@@ -91,22 +99,15 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
         buyForm.notes
       );
 
-      console.log('buyShares result:', result);
-
       if (result.success) {
-        console.log('Buy successful, updating UI');
         setBuyForm({ ticker: '', shares: '', notes: '' });
         setCurrentPrice(null);
         setShowBuyModal(false);
-        console.log('Calling onRefresh function...');
         await onRefresh();
-        console.log('onRefresh completed');
       } else {
-        console.log('Buy failed:', result.error);
         alert('Error buying shares: ' + result.error);
       }
     } catch (error) {
-      console.error('Error in handleBuy:', error);
       alert('Error: ' + error.message);
     } finally {
       setLoading(false);
@@ -118,12 +119,13 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
     setLoading(true);
     try {
-      const price = await stockServices.getStockPrice(selectedPosition.ticker);
-      if (!price) {
+      const priceData = await stockServices.getStockPrice(selectedPosition.ticker);
+      if (!priceData || !priceData.price) {
         alert('Could not get current price for this stock. Please try again.');
         return;
       }
 
+      const price = priceData.price;
       const result = await portfolioServices.sellShares(
         portfolio.id,
         selectedPosition.ticker,
@@ -165,7 +167,12 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
       const value = calculatePositionValue(position);
       return total + (value || 0);
     }, 0);
-    return positionsValue + (portfolio?.current_cash || 0);
+    const startingCash = portfolio?.starting_cash || 50000000;
+    const totalInvested = calculateTotalInvested();
+    const availableCash = startingCash - totalInvested;
+    
+    // Total value = Current market value of positions + Available cash
+    return positionsValue + availableCash;
   };
 
   const calculateTotalGainLoss = () => {
@@ -178,8 +185,94 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
   const calculateTotalReturn = () => {
     const totalValue = calculateTotalValue();
+    if (totalValue === null || totalValue === undefined) {
+      return null;
+    }
     const startingValue = portfolio?.starting_cash || 50000000;
     return ((totalValue - startingValue) / startingValue) * 100;
+  };
+
+  // Calculate total amount invested in positions (for cash calculation)
+  const calculateTotalInvested = () => {
+    return positions.reduce((total, position) => {
+      return total + (position.shares * position.average_price);
+    }, 0);
+  };
+
+  // Calculate available cash (starting cash - amount invested)
+  const calculateAvailableCash = () => {
+    const startingCash = portfolio?.starting_cash || 50000000;
+    const totalInvested = calculateTotalInvested();
+    return startingCash - totalInvested;
+  };
+
+  // Sorting function
+  const sortData = (data, key, direction) => {
+    return [...data].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (key) {
+        case 'ticker':
+          aValue = a.ticker;
+          bValue = b.ticker;
+          break;
+        case 'lastPrice':
+          aValue = currentPrices[a.ticker] || 0;
+          bValue = currentPrices[b.ticker] || 0;
+          break;
+        case 'priceChange':
+          aValue = priceChanges[a.ticker]?.change || 0;
+          bValue = priceChanges[b.ticker]?.change || 0;
+          break;
+        case 'todayGainLoss':
+          aValue = calculatePositionGainLoss(a) || 0;
+          bValue = calculatePositionGainLoss(b) || 0;
+          break;
+        case 'totalGainLoss':
+          aValue = calculatePositionGainLoss(a) || 0;
+          bValue = calculatePositionGainLoss(b) || 0;
+          break;
+        case 'currentValue':
+          aValue = calculatePositionValue(a) || 0;
+          bValue = calculatePositionValue(b) || 0;
+          break;
+        case 'accountPercentage':
+          const totalValue = calculateTotalValue();
+          aValue = totalValue > 0 ? (calculatePositionValue(a) || 0) / totalValue : 0;
+          bValue = totalValue > 0 ? (calculatePositionValue(b) || 0) / totalValue : 0;
+          break;
+        case 'quantity':
+          aValue = a.shares;
+          bValue = b.shares;
+          break;
+        case 'averageCost':
+          aValue = a.average_price;
+          bValue = b.average_price;
+          break;
+        case 'costBasis':
+          aValue = a.shares * a.average_price;
+          bValue = b.shares * b.average_price;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (direction === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  };
+
+  const handleSort = (key) => {
+    const direction = sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return '↕️';
+    return sortConfig.direction === 'asc' ? '↑' : '↓';
   };
 
   const formatCurrency = (amount) => {
@@ -190,6 +283,9 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   };
 
   const formatPercentage = (value) => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return 'Loading...';
+    }
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
 
@@ -202,8 +298,8 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
     setPriceLoading(true);
     try {
-      const price = await stockServices.getStockPrice(ticker.toUpperCase());
-      setCurrentPrice(price);
+      const priceData = await stockServices.getStockPrice(ticker.toUpperCase());
+      setCurrentPrice(priceData?.price || null);
     } catch (error) {
       console.error('Error fetching price:', error);
       setCurrentPrice(null);
@@ -220,12 +316,14 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
     const totalCost = shares * currentPrice;
     const portfolioValue = calculateTotalValue();
     const percentage = (totalCost / portfolioValue) * 100;
+    const availableCash = calculateAvailableCash();
     
     return {
       totalCost,
       percentage,
       shares,
-      price: currentPrice
+      price: currentPrice,
+      availableCash
     };
   };
 
@@ -237,55 +335,50 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
           <h2 className="text-xl font-semibold">Portfolio Summary</h2>
           <div className="flex space-x-2">
             <button
-              onClick={async () => {
-                console.log('Testing portfolio access...');
-                const result = await testPortfolioAccess();
-                console.log('Test result:', result);
-                alert('Check console for test results');
-              }}
-              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
-            >
-              Test DB Access
-            </button>
-            <button
-              onClick={() => {
-                console.log('Current portfolio data:', portfolio);
-                console.log('Current positions:', positions);
-                console.log('Current transactions:', transactions);
-                alert('Check console for current data');
-              }}
-              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-            >
-              Show Data
-            </button>
-            <button
-              onClick={async () => {
-                console.log('Force refreshing portfolio data...');
-                await onRefresh();
-                console.log('Refresh completed');
-                alert('Portfolio data refreshed');
-              }}
-              className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 transition-colors"
-            >
-              Force Refresh
-            </button>
-            <button
-              onClick={async () => {
-                console.log('Cleaning up multiple portfolios...');
-                const result = await cleanupPortfolios();
-                console.log('Cleanup result:', result);
-                alert('Multiple portfolios cleaned up. Check console for details.');
-              }}
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition-colors"
-            >
-              Cleanup Portfolios
-            </button>
-            <button
               onClick={() => setShowBuyModal(true)}
               className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors flex items-center"
             >
               <Plus size={16} className="mr-2" />
               Buy Stock
+            </button>
+            <button
+              onClick={async () => {
+                setPricesLoading(true);
+                const pricePromises = positions.map(async (position) => {
+                  try {
+                    const priceData = await stockServices.getStockPrice(position.ticker);
+                    return { 
+                      ticker: position.ticker, 
+                      price: priceData?.price || null,
+                      change: priceData?.change || null,
+                      changePercent: priceData?.changePercent || null
+                    };
+                  } catch (error) {
+                    console.error(`Error loading price for ${position.ticker}:`, error);
+                    return { ticker: position.ticker, price: null, change: null, changePercent: null };
+                  }
+                });
+
+                const prices = await Promise.all(pricePromises);
+                const priceMap = {};
+                const changeMap = {};
+                prices.forEach(({ ticker, price, change, changePercent }) => {
+                  priceMap[ticker] = price;
+                  changeMap[ticker] = { change, changePercent };
+                });
+                setCurrentPrices(priceMap);
+                setPriceChanges(changeMap);
+                setPricesLoading(false);
+              }}
+              className="bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600 transition-colors flex items-center"
+              disabled={pricesLoading}
+            >
+              {pricesLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              ) : (
+                <TrendingUp size={16} className="mr-2" />
+              )}
+              Refresh Prices
             </button>
           </div>
         </div>
@@ -318,7 +411,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
               <DollarSign className="text-yellow-600 mr-2" size={20} />
               <div>
                 <p className="text-sm text-gray-600">Available Cash</p>
-                <p className="text-lg font-semibold">{formatCurrency(portfolio?.current_cash || 0)}</p>
+                <p className="text-lg font-semibold">{formatCurrency(calculateAvailableCash())}</p>
               </div>
             </div>
           </div>
@@ -357,78 +450,153 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
         </div>
       </div>
 
-      {/* Positions */}
+      {/* Positions Table */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold mb-4">Current Positions</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Current Positions</h3>
+          {pricesLoading && (
+            <div className="flex items-center text-blue-600">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+              Refreshing prices...
+            </div>
+          )}
+        </div>
         
         {positions.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p>No positions yet. Start by buying some stocks!</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {positions.map((position) => {
-              const currentPrice = currentPrices[position.ticker];
-              const positionValue = calculatePositionValue(position);
-              const gainLoss = calculatePositionGainLoss(position);
-              const gainLossPercent = gainLoss && positionValue ? (gainLoss / (positionValue - gainLoss)) * 100 : null;
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('ticker')}>
+                    Ticker {getSortIcon('ticker')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('lastPrice')}>
+                    Last Price {getSortIcon('lastPrice')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('priceChange')}>
+                    Price Change {getSortIcon('priceChange')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('todayGainLoss')}>
+                    % Today's G/L {getSortIcon('todayGainLoss')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('totalGainLoss')}>
+                    $ Total G/L {getSortIcon('totalGainLoss')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('totalGainLoss')}>
+                    % Total G/L {getSortIcon('totalGainLoss')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('currentValue')}>
+                    Current Value {getSortIcon('currentValue')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('accountPercentage')}>
+                    % of Account {getSortIcon('accountPercentage')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('quantity')}>
+                    Quantity {getSortIcon('quantity')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('averageCost')}>
+                    Avg Cost {getSortIcon('averageCost')}
+                  </th>
+                  <th className="text-right py-2 px-2 cursor-pointer hover:bg-gray-50" onClick={() => handleSort('costBasis')}>
+                    Cost Basis {getSortIcon('costBasis')}
+                  </th>
+                  <th className="text-right py-2 px-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortData(positions, sortConfig.key, sortConfig.direction).map((position) => {
+                  const currentPrice = currentPrices[position.ticker];
+                  const positionValue = calculatePositionValue(position);
+                  const gainLoss = calculatePositionGainLoss(position);
+                  const costBasis = position.shares * position.average_price;
+                  const gainLossPercent = gainLoss !== null && costBasis > 0 ? (gainLoss / costBasis) * 100 : null;
+                  const totalValue = calculateTotalValue();
+                  const accountPercentage = totalValue > 0 ? (positionValue || 0) / totalValue * 100 : 0;
+                  const priceChange = priceChanges[position.ticker];
+                  const todayGainLossPercent = priceChange?.changePercent || 0;
 
-              return (
-                <div key={position.id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h4 className="font-semibold text-lg">{position.ticker}</h4>
-                        <span className="text-sm text-gray-600">
-                          {position.shares} shares @ {formatCurrency(position.average_price)}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Current Price</p>
-                          <p className="font-medium">
-                            {currentPrice ? formatCurrency(currentPrice) : 'Loading...'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Position Value</p>
-                          <p className="font-medium">
-                            {positionValue ? formatCurrency(positionValue) : 'Loading...'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Gain/Loss</p>
-                          <p className={`font-medium ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {gainLoss ? formatCurrency(gainLoss) : 'Loading...'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Gain/Loss %</p>
-                          <p className={`font-medium ${gainLossPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {gainLossPercent ? formatPercentage(gainLossPercent) : 'Loading...'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedPosition(position);
-                          setSellForm({ shares: '', notes: '' });
-                          setShowSellModal(true);
-                        }}
-                        className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 flex items-center"
-                      >
-                        <Minus size={14} className="mr-1" />
-                        Sell
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  return (
+                    <tr key={position.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-2 font-medium">{position.ticker}</td>
+                      <td className="py-3 px-2 text-right">
+                        {currentPrice !== null ? formatCurrency(currentPrice) : (
+                          <span className="text-gray-500">Loading...</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {priceChange?.change ? (
+                          <span className={priceChange.change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {priceChange.change >= 0 ? '+' : ''}{formatCurrency(priceChange.change)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">--</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {todayGainLossPercent ? (
+                          <span className={todayGainLossPercent >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {todayGainLossPercent >= 0 ? '+' : ''}{todayGainLossPercent.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">--</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {gainLoss !== null ? (
+                          <span className={gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {gainLoss >= 0 ? '+' : ''}{formatCurrency(gainLoss)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">Loading...</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {gainLossPercent !== null ? (
+                          <span className={gainLossPercent >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {gainLossPercent >= 0 ? '+' : ''}{gainLossPercent.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">Loading...</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {positionValue !== null ? formatCurrency(positionValue) : (
+                          <span className="text-gray-500">Loading...</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {accountPercentage.toFixed(2)}%
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {position.shares.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {formatCurrency(position.average_price)}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        {formatCurrency(position.shares * position.average_price)}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedPosition(position);
+                            setSellForm({ shares: '', notes: '' });
+                            setShowSellModal(true);
+                          }}
+                          className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
+                        >
+                          Sell
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -479,7 +647,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
             <div className="space-y-4">
               <div className="mb-4 p-3 bg-blue-50 rounded-md">
                 <p className="text-sm text-blue-800">
-                  Available Cash: <span className="font-semibold">{formatCurrency(portfolio?.current_cash || 0)}</span>
+                  Available Cash: <span className="font-semibold">{formatCurrency(calculateAvailableCash())}</span>
                 </p>
               </div>
               
@@ -537,8 +705,8 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-blue-700">Remaining Cash:</span>
-                      <span className={`font-semibold ${(portfolio?.current_cash || 0) - calculatePurchaseDetails().totalCost >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency((portfolio?.current_cash || 0) - calculatePurchaseDetails().totalCost)}
+                      <span className={`font-semibold ${calculatePurchaseDetails().availableCash - calculatePurchaseDetails().totalCost >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(calculatePurchaseDetails().availableCash - calculatePurchaseDetails().totalCost)}
                       </span>
                     </div>
                   </div>
@@ -573,7 +741,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                 onClick={handleBuy}
                 className="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50"
                 disabled={loading || !buyForm.ticker || !buyForm.shares || 
-                  (calculatePurchaseDetails() && calculatePurchaseDetails().totalCost > (portfolio?.current_cash || 0))}
+                  (calculatePurchaseDetails() && calculatePurchaseDetails().totalCost > calculatePurchaseDetails().availableCash)}
               >
                 {loading ? 'Buying...' : 'Buy'}
               </button>

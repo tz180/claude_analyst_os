@@ -498,56 +498,27 @@ export const portfolioServices = {
   // Get user's portfolio
   async getPortfolio() {
     try {
-      console.log('=== getPortfolio FUNCTION START ===');
       const userId = await getCurrentUserId();
-      console.log('Current user ID:', userId);
       
-      // For development, if no user ID, find portfolio with actual data
+      // For development, if no user ID, find the most recent portfolio
       if (!userId) {
-        console.log('No user ID found, finding portfolio with actual data');
-        
-        // First, try to find a portfolio that has transactions
-        const { data: portfolioWithTransactions, error: transactionError } = await supabase
-          .from('portfolio_transactions')
-          .select('portfolio_id')
-          .limit(1)
-          .single();
-        
-        if (portfolioWithTransactions) {
-          console.log('Found portfolio with transactions:', portfolioWithTransactions.portfolio_id);
-          
-          // Get the portfolio details
-          const { data: portfolio, error: portfolioError } = await supabase
-            .from('portfolios')
-            .select('*')
-            .eq('id', portfolioWithTransactions.portfolio_id)
-            .single();
-          
-          console.log('Portfolio query result (with transactions):', { data: portfolio, error: portfolioError });
-          
-          if (portfolio) {
-            console.log('=== getPortfolio FUNCTION SUCCESS ===');
-            return portfolio;
-          }
-        }
-        
-        // Fallback: get the first portfolio
-        console.log('No portfolio with transactions found, getting first portfolio');
+        // Get the most recent portfolio (by created_at)
         const { data, error } = await supabase
           .from('portfolios')
           .select('*')
-          .limit(1)
-          .single();
+          .order('created_at', { ascending: false })
+          .limit(1);
         
-        console.log('Portfolio query result (fallback):', { data, error });
-        
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        if (error) {
           console.error('Error fetching portfolio:', error);
           return null;
         }
         
-        console.log('=== getPortfolio FUNCTION SUCCESS ===');
-        return data;
+        if (data && data.length > 0) {
+          return data[0];
+        }
+        
+        return null;
       }
 
       // Normal user-specific query
@@ -555,19 +526,20 @@ export const portfolioServices = {
         .from('portfolios')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1);
       
-      console.log('Portfolio query result:', { data, error });
-      
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      if (error) {
         console.error('Error fetching portfolio:', error);
         return null;
       }
       
-      console.log('=== getPortfolio FUNCTION SUCCESS ===');
-      return data;
+      if (data && data.length > 0) {
+        return data[0];
+      }
+      
+      return null;
     } catch (error) {
-      console.error('=== getPortfolio FUNCTION ERROR ===');
       console.error('Error in getPortfolio:', error);
       return null;
     }
@@ -576,9 +548,7 @@ export const portfolioServices = {
   // Create portfolio for user
   async createPortfolio() {
     try {
-      console.log('=== createPortfolio FUNCTION START ===');
       const userId = await getCurrentUserId();
-      console.log('Current user ID:', userId);
       
       // For development, if no user ID, create portfolio without user_id
       const portfolioData = userId ? {
@@ -595,20 +565,15 @@ export const portfolioServices = {
       const { data, error } = await supabase
         .from('portfolios')
         .insert(portfolioData)
-        .select()
-        .single();
-      
-      console.log('Create portfolio result:', { data, error });
+        .select();
       
       if (error) {
         console.error('Error creating portfolio:', error);
         return { success: false, error };
       }
       
-      console.log('=== createPortfolio FUNCTION SUCCESS ===');
-      return { success: true, data };
+      return { success: true, data: data && data.length > 0 ? data[0] : null };
     } catch (error) {
-      console.error('=== createPortfolio FUNCTION ERROR ===');
       console.error('Error in createPortfolio:', error);
       return { success: false, error };
     }
@@ -684,8 +649,7 @@ export const portfolioServices = {
       const { data: portfolio, error: portfolioError } = await supabase
         .from('portfolios')
         .select('current_cash')
-        .eq('id', portfolioId)
-        .single();
+        .eq('id', portfolioId);
       
       console.log('Portfolio query result:', { portfolio, error: portfolioError });
       
@@ -694,15 +658,16 @@ export const portfolioServices = {
         return { success: false, error: 'Error fetching portfolio: ' + portfolioError.message };
       }
       
-      if (!portfolio) {
+      if (!portfolio || portfolio.length === 0) {
         console.error('Portfolio not found');
         return { success: false, error: 'Portfolio not found' };
       }
       
-      console.log('Current cash:', portfolio.current_cash);
+      const portfolioData = portfolio[0];
+      console.log('Current cash:', portfolioData.current_cash);
       console.log('Required amount:', totalAmount);
       
-      if (portfolio.current_cash < totalAmount) {
+      if (portfolioData.current_cash < totalAmount) {
         console.error('Insufficient cash');
         return { success: false, error: 'Insufficient cash to complete purchase' };
       }
@@ -720,8 +685,7 @@ export const portfolioServices = {
           total_amount: totalAmount,
           notes
         })
-        .select()
-        .single();
+        .select();
       
       console.log('Transaction insert result:', { transaction, error: transactionError });
       
@@ -736,16 +700,16 @@ export const portfolioServices = {
         .from('portfolio_positions')
         .select('*')
         .eq('portfolio_id', portfolioId)
-        .eq('ticker', ticker)
-        .single();
+        .eq('ticker', ticker);
 
       console.log('Position query result:', { existingPosition, error: positionQueryError });
 
-      if (existingPosition) {
+      if (existingPosition && existingPosition.length > 0) {
         // Update existing position
+        const positionData = existingPosition[0];
         console.log('Updating existing position...');
-        const newShares = existingPosition.shares + shares;
-        const newAveragePrice = ((existingPosition.shares * existingPosition.average_price) + totalAmount) / newShares;
+        const newShares = positionData.shares + shares;
+        const newAveragePrice = ((positionData.shares * positionData.average_price) + totalAmount) / newShares;
         
         console.log('New position values:', { newShares, newAveragePrice });
         
@@ -755,7 +719,7 @@ export const portfolioServices = {
             shares: newShares,
             average_price: newAveragePrice
           })
-          .eq('id', existingPosition.id);
+          .eq('id', positionData.id);
         
         console.log('Position update result:', { error: updateError });
         
@@ -785,7 +749,7 @@ export const portfolioServices = {
 
       // Update cash balance
       console.log('Updating cash balance...');
-      const newCashBalance = portfolio.current_cash - totalAmount;
+      const newCashBalance = portfolioData.current_cash - totalAmount;
       console.log('New cash balance:', newCashBalance);
       
       const { error: cashUpdateError } = await supabase
@@ -801,7 +765,7 @@ export const portfolioServices = {
       }
 
       console.log('=== buyShares FUNCTION SUCCESS ===');
-      return { success: true, data: transaction };
+      return { success: true, data: transaction && transaction.length > 0 ? transaction[0] : null };
     } catch (error) {
       console.error('=== buyShares FUNCTION ERROR ===');
       console.error('Error buying shares:', error);
@@ -821,12 +785,13 @@ export const portfolioServices = {
         .from('portfolio_positions')
         .select('*')
         .eq('portfolio_id', portfolioId)
-        .eq('ticker', ticker)
-        .single();
+        .eq('ticker', ticker);
       
-      if (!position || position.shares < shares) {
+      if (!position || position.length === 0 || position[0].shares < shares) {
         return { success: false, error: 'Insufficient shares to sell' };
       }
+      
+      const positionData = position[0];
 
       // Record transaction
       const { data: transaction, error: transactionError } = await supabase
@@ -840,20 +805,19 @@ export const portfolioServices = {
           total_amount: totalAmount,
           notes
         })
-        .select()
-        .single();
+        .select();
       
       if (transactionError) throw transactionError;
 
       // Update position
-      const remainingShares = position.shares - shares;
+      const remainingShares = positionData.shares - shares;
       
       if (remainingShares === 0) {
         // Delete position if no shares remaining
         const { error: deleteError } = await supabase
           .from('portfolio_positions')
           .delete()
-          .eq('id', position.id);
+          .eq('id', positionData.id);
         
         if (deleteError) throw deleteError;
       } else {
@@ -863,7 +827,7 @@ export const portfolioServices = {
           .update({
             shares: remainingShares
           })
-          .eq('id', position.id);
+          .eq('id', positionData.id);
         
         if (updateError) throw updateError;
       }
@@ -872,11 +836,10 @@ export const portfolioServices = {
       const { data: portfolio } = await supabase
         .from('portfolios')
         .select('current_cash')
-        .eq('id', portfolioId)
-        .single();
+        .eq('id', portfolioId);
       
-      if (portfolio) {
-        const newCashBalance = portfolio.current_cash + totalAmount;
+      if (portfolio && portfolio.length > 0) {
+        const newCashBalance = portfolio[0].current_cash + totalAmount;
         const { error: cashUpdateError } = await supabase
           .from('portfolios')
           .update({ current_cash: newCashBalance })
@@ -886,7 +849,7 @@ export const portfolioServices = {
       }
 
       console.log('Sell transaction completed successfully');
-      return { success: true, data: transaction };
+      return { success: true, data: transaction && transaction.length > 0 ? transaction[0] : null };
     } catch (error) {
       console.error('Error selling shares:', error);
       return { success: false, error };
@@ -1354,5 +1317,70 @@ export const cleanupPortfolios = async () => {
   } catch (error) {
     console.error('Cleanup function error:', error);
     return { success: false, error: error.message };
+  }
+}; 
+
+// Test function to verify Supabase connection and portfolio creation
+export const testSupabaseConnection = async () => {
+  try {
+    console.log('=== TESTING SUPABASE CONNECTION ===');
+    
+    // Test 1: Check if we can connect to Supabase
+    const { data: testData, error: testError } = await supabase
+      .from('portfolios')
+      .select('count')
+      .limit(1);
+    
+    console.log('Supabase connection test:', { data: testData, error: testError });
+    
+    if (testError) {
+      console.error('❌ Supabase connection failed:', testError);
+      return { success: false, error: testError };
+    }
+    
+    console.log('✅ Supabase connection successful');
+    
+    // Test 2: Try to create a test portfolio
+    const testPortfolioData = {
+      name: 'Test Portfolio',
+      starting_cash: 1000000.00,
+      current_cash: 1000000.00
+    };
+    
+    console.log('Attempting to create test portfolio with data:', testPortfolioData);
+    
+    const { data: createData, error: createError } = await supabase
+      .from('portfolios')
+      .insert(testPortfolioData)
+      .select();
+    
+    console.log('Portfolio creation test:', { data: createData, error: createError });
+    
+    if (createError) {
+      console.error('❌ Portfolio creation failed:', createError);
+      return { success: false, error: createError };
+    }
+    
+    const createdPortfolio = createData && createData.length > 0 ? createData[0] : null;
+    console.log('✅ Portfolio creation successful:', createdPortfolio);
+    
+    // Clean up: Delete the test portfolio
+    const { error: deleteError } = await supabase
+      .from('portfolios')
+      .delete()
+      .eq('id', createdPortfolio.id);
+    
+    if (deleteError) {
+      console.warn('⚠️ Could not delete test portfolio:', deleteError);
+    } else {
+      console.log('✅ Test portfolio cleaned up');
+    }
+    
+    console.log('=== SUPABASE CONNECTION TEST COMPLETE ===');
+    return { success: true, data: createdPortfolio };
+    
+  } catch (error) {
+    console.error('❌ Test failed with exception:', error);
+    return { success: false, error };
   }
 }; 

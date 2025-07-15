@@ -247,7 +247,15 @@ export const stockServices = {
         return null;
       }
       
-      return parseFloat(quote['05. price']);
+      const price = parseFloat(quote['05. price']);
+      const change = parseFloat(quote['09. change']);
+      const changePercent = quote['10. change percent'];
+      
+      return {
+        price: price,
+        change: change,
+        changePercent: changePercent ? parseFloat(changePercent.replace('%', '')) : 0
+      };
     } catch (error) {
       console.error('Error getting stock price:', error);
       return null;
