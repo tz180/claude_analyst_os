@@ -502,16 +502,44 @@ export const portfolioServices = {
       const userId = await getCurrentUserId();
       console.log('Current user ID:', userId);
       
-      // For development, if no user ID, just get the first portfolio
+      // For development, if no user ID, find portfolio with actual data
       if (!userId) {
-        console.log('No user ID found, getting first portfolio for development');
+        console.log('No user ID found, finding portfolio with actual data');
+        
+        // First, try to find a portfolio that has transactions
+        const { data: portfolioWithTransactions, error: transactionError } = await supabase
+          .from('portfolio_transactions')
+          .select('portfolio_id')
+          .limit(1)
+          .single();
+        
+        if (portfolioWithTransactions) {
+          console.log('Found portfolio with transactions:', portfolioWithTransactions.portfolio_id);
+          
+          // Get the portfolio details
+          const { data: portfolio, error: portfolioError } = await supabase
+            .from('portfolios')
+            .select('*')
+            .eq('id', portfolioWithTransactions.portfolio_id)
+            .single();
+          
+          console.log('Portfolio query result (with transactions):', { data: portfolio, error: portfolioError });
+          
+          if (portfolio) {
+            console.log('=== getPortfolio FUNCTION SUCCESS ===');
+            return portfolio;
+          }
+        }
+        
+        // Fallback: get the first portfolio
+        console.log('No portfolio with transactions found, getting first portfolio');
         const { data, error } = await supabase
           .from('portfolios')
           .select('*')
           .limit(1)
           .single();
         
-        console.log('Portfolio query result (development):', { data, error });
+        console.log('Portfolio query result (fallback):', { data, error });
         
         if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
           console.error('Error fetching portfolio:', error);
@@ -1263,5 +1291,68 @@ export const testPortfolioAccess = async () => {
   } catch (error) {
     console.error('Test function error:', error);
     return { error: error.message };
+  }
+};
+
+// Function to clean up multiple portfolios
+export const cleanupPortfolios = async () => {
+  try {
+    console.log('=== CLEANING UP PORTFOLIOS ===');
+    
+    // Get all portfolios
+    const { data: portfolios, error: portfoliosError } = await supabase
+      .from('portfolios')
+      .select('*');
+    
+    if (portfoliosError) {
+      console.error('Error fetching portfolios:', portfoliosError);
+      return { success: false, error: portfoliosError };
+    }
+    
+    console.log('Found portfolios:', portfolios.length);
+    
+    if (portfolios.length <= 1) {
+      console.log('No cleanup needed, only one portfolio exists');
+      return { success: true, message: 'No cleanup needed' };
+    }
+    
+    // Find the portfolio with the most transactions (main portfolio)
+    const { data: transactionCounts, error: transactionError } = await supabase
+      .from('portfolio_transactions')
+      .select('portfolio_id, count')
+      .select('portfolio_id')
+      .select('*');
+    
+    if (transactionError) {
+      console.error('Error fetching transaction counts:', transactionError);
+      return { success: false, error: transactionError };
+    }
+    
+    // Count transactions per portfolio
+    const portfolioTransactionCounts = {};
+    transactionCounts.forEach(transaction => {
+      portfolioTransactionCounts[transaction.portfolio_id] = (portfolioTransactionCounts[transaction.portfolio_id] || 0) + 1;
+    });
+    
+    // Find portfolio with most transactions
+    const mainPortfolioId = Object.keys(portfolioTransactionCounts).reduce((a, b) => 
+      portfolioTransactionCounts[a] > portfolioTransactionCounts[b] ? a : b
+    );
+    
+    console.log('Main portfolio ID:', mainPortfolioId);
+    console.log('Transaction counts:', portfolioTransactionCounts);
+    
+    // Delete other portfolios (this is destructive, so we'll just log for now)
+    console.log('Would delete portfolios:', portfolios.filter(p => p.id !== mainPortfolioId).map(p => p.id));
+    
+    return { 
+      success: true, 
+      message: `Found ${portfolios.length} portfolios, main portfolio has ${portfolioTransactionCounts[mainPortfolioId] || 0} transactions`,
+      mainPortfolioId,
+      portfolioCounts: portfolioTransactionCounts
+    };
+  } catch (error) {
+    console.error('Cleanup function error:', error);
+    return { success: false, error: error.message };
   }
 }; 

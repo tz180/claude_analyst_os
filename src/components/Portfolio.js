@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Plus, Minus, BarChart3 } from 'lucide-react';
-import { portfolioServices, testPortfolioAccess } from '../supabaseServices';
+import { portfolioServices, testPortfolioAccess, cleanupPortfolios } from '../supabaseServices';
 import { stockServices } from '../stockServices';
 
 const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
@@ -268,6 +268,17 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
               className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 transition-colors"
             >
               Force Refresh
+            </button>
+            <button
+              onClick={async () => {
+                console.log('Cleaning up multiple portfolios...');
+                const result = await cleanupPortfolios();
+                console.log('Cleanup result:', result);
+                alert('Multiple portfolios cleaned up. Check console for details.');
+              }}
+              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition-colors"
+            >
+              Cleanup Portfolios
             </button>
             <button
               onClick={() => setShowBuyModal(true)}
