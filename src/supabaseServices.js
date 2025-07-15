@@ -1218,3 +1218,50 @@ export const stockNotesServices = {
     return { success: true, data };
   }
 }; 
+
+// Test function to check portfolio access
+export const testPortfolioAccess = async () => {
+  try {
+    console.log('=== TESTING PORTFOLIO ACCESS ===');
+    
+    // Test 1: Simple select without any filters
+    console.log('Test 1: Simple select from portfolios');
+    const { data: test1, error: error1 } = await supabase
+      .from('portfolios')
+      .select('*')
+      .limit(1);
+    
+    console.log('Test 1 result:', { data: test1, error: error1 });
+    
+    // Test 2: Count total portfolios
+    console.log('Test 2: Count portfolios');
+    const { count: test2, error: error2 } = await supabase
+      .from('portfolios')
+      .select('*', { count: 'exact', head: true });
+    
+    console.log('Test 2 result:', { count: test2, error: error2 });
+    
+    // Test 3: Try to insert a test portfolio
+    console.log('Test 3: Insert test portfolio');
+    const { data: test3, error: error3 } = await supabase
+      .from('portfolios')
+      .insert({
+        name: 'Test Portfolio',
+        starting_cash: 1000000.00,
+        current_cash: 1000000.00
+      })
+      .select()
+      .single();
+    
+    console.log('Test 3 result:', { data: test3, error: error3 });
+    
+    return {
+      test1: { data: test1, error: error1 },
+      test2: { count: test2, error: error2 },
+      test3: { data: test3, error: error3 }
+    };
+  } catch (error) {
+    console.error('Test function error:', error);
+    return { error: error.message };
+  }
+}; 

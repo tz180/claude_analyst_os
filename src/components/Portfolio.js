@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Plus, Minus, BarChart3 } from 'lucide-react';
-import { portfolioServices } from '../supabaseServices';
+import { portfolioServices, testPortfolioAccess } from '../supabaseServices';
 import { stockServices } from '../stockServices';
 
 const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
@@ -235,13 +235,26 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Portfolio Summary</h2>
-          <button
-            onClick={() => setShowBuyModal(true)}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors flex items-center"
-          >
-            <Plus size={16} className="mr-2" />
-            Buy Stock
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={async () => {
+                console.log('Testing portfolio access...');
+                const result = await testPortfolioAccess();
+                console.log('Test result:', result);
+                alert('Check console for test results');
+              }}
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
+            >
+              Test DB Access
+            </button>
+            <button
+              onClick={() => setShowBuyModal(true)}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors flex items-center"
+            >
+              <Plus size={16} className="mr-2" />
+              Buy Stock
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
