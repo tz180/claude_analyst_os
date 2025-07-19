@@ -21,7 +21,7 @@ const Login = ({ onSwitchToSignup }) => {
 
     try {
       if (isSignup) {
-        const { data, error } = await signUp(email, password);
+        const { error } = await signUp(email, password);
         if (error) {
           setError(error.message);
         } else {

@@ -52,8 +52,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const resetPassword = async (email) => {
+    // Use production URL for redirects, fallback to current origin
+    const redirectUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://claude-analyst-os.vercel.app/reset-password'
+      : `${window.location.origin}/reset-password`;
+      
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: redirectUrl,
     });
     return { error };
   };

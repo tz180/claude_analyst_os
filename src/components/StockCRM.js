@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft, Target, FileText } from 'lucide-react';
 import { stockServices } from '../stockServices';
 import { analyticsServices, stockNotesServices } from '../supabaseServices';
@@ -15,13 +15,7 @@ const StockCRM = ({ ticker, onBack }) => {
   const [notes, setNotes] = useState([]);
   const [connectedData, setConnectedData] = useState(null);
 
-  useEffect(() => {
-    if (ticker) {
-      loadStockData();
-    }
-  }, [ticker]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadStockData = async () => {
+  const loadStockData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -54,7 +48,13 @@ const StockCRM = ({ ticker, onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [ticker]);
+
+  useEffect(() => {
+    if (ticker) {
+      loadStockData();
+    }
+  }, [ticker, loadStockData]);
 
   const formatCurrency = (value) => {
     if (!value) return 'N/A';

@@ -3,7 +3,7 @@ import { DollarSign, TrendingUp, Plus, BarChart3 } from 'lucide-react';
 import { portfolioServices } from '../supabaseServices';
 import { stockServices } from '../stockServices';
 
-const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
+const Portfolio = ({ portfolio, positions, transactions, onRefresh, debugPortfolios, cleanupPortfolios }) => {
   const [currentPrices, setCurrentPrices] = useState({});
   const [priceChanges, setPriceChanges] = useState({});
   const [showBuyModal, setShowBuyModal] = useState(false);
@@ -340,6 +340,18 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
             >
               <Plus size={16} className="mr-2" />
               Buy Stock
+            </button>
+            <button
+              onClick={debugPortfolios}
+              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition-colors"
+            >
+              Debug Portfolios
+            </button>
+            <button
+              onClick={cleanupPortfolios}
+              className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 transition-colors"
+            >
+              Cleanup Portfolios
             </button>
             <button
               onClick={async () => {

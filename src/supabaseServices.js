@@ -500,32 +500,13 @@ export const portfolioServices = {
     try {
       const userId = await getCurrentUserId();
       
-      // For development, if no user ID, find the most recent portfolio
-      if (!userId) {
-        // Get the most recent portfolio (by created_at)
-        const { data, error } = await supabase
-          .from('portfolios')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(1);
-        
-        if (error) {
-          console.error('Error fetching portfolio:', error);
-          return null;
-        }
-        
-        if (data && data.length > 0) {
-          return data[0];
-        }
-        
-        return null;
-      }
-
-      // Normal user-specific query
+      console.log('getPortfolio called with userId:', userId);
+      
+      // Always get the most recent portfolio regardless of user_id for now
+      // This ensures we always get the same portfolio
       const { data, error } = await supabase
         .from('portfolios')
         .select('*')
-        .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(1);
       
@@ -533,6 +514,8 @@ export const portfolioServices = {
         console.error('Error fetching portfolio:', error);
         return null;
       }
+      
+      console.log('getPortfolio result:', data);
       
       if (data && data.length > 0) {
         return data[0];
@@ -550,6 +533,15 @@ export const portfolioServices = {
     try {
       const userId = await getCurrentUserId();
       
+      console.log('createPortfolio called with userId:', userId);
+      
+      // Check if a portfolio already exists before creating
+      const existingPortfolio = await this.getPortfolio();
+      if (existingPortfolio) {
+        console.log('Portfolio already exists, returning existing one:', existingPortfolio);
+        return { success: true, data: existingPortfolio };
+      }
+      
       // For development, if no user ID, create portfolio without user_id
       const portfolioData = userId ? {
         user_id: userId,
@@ -562,6 +554,8 @@ export const portfolioServices = {
         current_cash: 50000000.00
       };
 
+      console.log('Creating new portfolio with data:', portfolioData);
+
       const { data, error } = await supabase
         .from('portfolios')
         .insert(portfolioData)
@@ -572,6 +566,7 @@ export const portfolioServices = {
         return { success: false, error };
       }
       
+      console.log('Successfully created portfolio:', data);
       return { success: true, data: data && data.length > 0 ? data[0] : null };
     } catch (error) {
       console.error('Error in createPortfolio:', error);
