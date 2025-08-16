@@ -440,8 +440,8 @@ export const pipelineServices = {
       status: item.status || 'On Deck',
       dateAdded: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown',
       daysInPipeline: item.created_at ? Math.ceil((new Date() - new Date(item.created_at)) / (1000 * 60 * 60 * 24)) : 0,
-      passReason: item.pass_reason,
-      passDate: item.pass_date,
+      passReason: item.pass_reason || '',
+      passDate: item.pass_date ? new Date(item.pass_date).toLocaleDateString() : '',
       inCoverage: false // This will be calculated separately
     }));
   },
@@ -479,10 +479,18 @@ export const pipelineServices = {
   },
 
   // Update pipeline idea status
-  async updatePipelineStatus(ideaId, status) {
+  async updatePipelineStatus(ideaId, status, passReason = null) {
+    const updateData = { status };
+    
+    // If passing an idea, set the pass date and reason
+    if (status === 'Passed' && passReason) {
+      updateData.pass_date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      updateData.pass_reason = passReason;
+    }
+    
     const { error } = await supabase
       .from('pipeline_ideas')
-      .update({ status })
+      .update(updateData)
       .eq('id', ideaId);
     
     if (error) {

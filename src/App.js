@@ -388,11 +388,11 @@ const AnalystOS = () => {
 
   const confirmPass = async () => {
     if (passingIdeaId) {
-      const result = await pipelineServices.updatePipelineStatus(passingIdeaId, 'Passed');
+      const result = await pipelineServices.updatePipelineStatus(passingIdeaId, 'Passed', passReason);
       if (result.success) {
-      setShowPassModal(false);
-      setPassingIdeaId(null);
-      setPassReason('Not a Fit');
+        setShowPassModal(false);
+        setPassingIdeaId(null);
+        setPassReason('Not a Fit');
         await loadDataFromSupabase(); // Refresh data
       } else {
         console.error('Error passing idea:', result.error);
@@ -998,8 +998,8 @@ const AnalystOS = () => {
                           </div>
                           <div className="text-sm text-gray-600 mt-1">
                             <div>Added: {idea.dateAdded}</div>
-                            <div className="text-red-600 font-medium">Passed: {idea.passReason}</div>
-                            <div>Pass Date: {idea.passDate}</div>
+                            <div className="text-red-600 font-medium">Passed: {idea.passReason || 'No reason specified'}</div>
+                            <div>Pass Date: {idea.passDate || 'Date not set'}</div>
                           </div>
                         </div>
                         <div className="flex flex-col space-y-1">
