@@ -162,17 +162,31 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh, debugPortfol
     return currentValue - costBasis;
   };
 
+  const calculateTotalInvested = () => {
+    return positions.reduce((total, position) => {
+      return total + (position.shares * position.average_price);
+    }, 0);
+  };
+
+  const getPortfolioCash = () => {
+    if (portfolio && typeof portfolio.current_cash === 'number' && !Number.isNaN(portfolio.current_cash)) {
+      return portfolio.current_cash;
+    }
+
+    const startingCash = portfolio?.starting_cash || 50000000;
+    const fallbackCash = startingCash - calculateTotalInvested();
+    return fallbackCash;
+  };
+
   const calculateTotalValue = () => {
     const positionsValue = positions.reduce((total, position) => {
       const value = calculatePositionValue(position);
       return total + (value || 0);
     }, 0);
-    const startingCash = portfolio?.starting_cash || 50000000;
-    const totalInvested = calculateTotalInvested();
-    const availableCash = startingCash - totalInvested;
-    
+    const cashOnHand = getPortfolioCash();
+
     // Total value = Current market value of positions + Available cash
-    return positionsValue + availableCash;
+    return positionsValue + (typeof cashOnHand === 'number' && !Number.isNaN(cashOnHand) ? cashOnHand : 0);
   };
 
   const calculateTotalGainLoss = () => {
@@ -192,18 +206,10 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh, debugPortfol
     return ((totalValue - startingValue) / startingValue) * 100;
   };
 
-  // Calculate total amount invested in positions (for cash calculation)
-  const calculateTotalInvested = () => {
-    return positions.reduce((total, position) => {
-      return total + (position.shares * position.average_price);
-    }, 0);
-  };
-
-  // Calculate available cash (starting cash - amount invested)
+  // Calculate available cash using portfolio cash balance with fallback to starting cash math
   const calculateAvailableCash = () => {
-    const startingCash = portfolio?.starting_cash || 50000000;
-    const totalInvested = calculateTotalInvested();
-    return startingCash - totalInvested;
+    const cashOnHand = getPortfolioCash();
+    return typeof cashOnHand === 'number' && !Number.isNaN(cashOnHand) ? cashOnHand : 0;
   };
 
   // Sorting function
