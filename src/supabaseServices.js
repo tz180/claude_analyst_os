@@ -510,11 +510,16 @@ export const portfolioServices = {
       
       console.log('getPortfolio called with userId:', userId);
       
-      // Always get the most recent portfolio regardless of user_id for now
-      // This ensures we always get the same portfolio
+      if (!userId) {
+        console.error('No user ID available');
+        return null;
+      }
+      
+      // Get the user's most recent portfolio
       const { data, error } = await supabase
         .from('portfolios')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(1);
       
@@ -543,6 +548,11 @@ export const portfolioServices = {
       
       console.log('createPortfolio called with userId:', userId);
       
+      if (!userId) {
+        console.error('No user ID available');
+        return { success: false, error: 'User not authenticated' };
+      }
+      
       // Check if a portfolio already exists before creating
       const existingPortfolio = await this.getPortfolio();
       if (existingPortfolio) {
@@ -550,13 +560,9 @@ export const portfolioServices = {
         return { success: true, data: existingPortfolio };
       }
       
-      // For development, if no user ID, create portfolio without user_id
-      const portfolioData = userId ? {
+      // Create portfolio with user_id
+      const portfolioData = {
         user_id: userId,
-        name: 'My Portfolio',
-        starting_cash: 50000000.00,
-        current_cash: 50000000.00
-      } : {
         name: 'My Portfolio',
         starting_cash: 50000000.00,
         current_cash: 50000000.00
