@@ -10,6 +10,7 @@ import {
   analyticsServices,
   portfolioServices
 } from './supabaseServices';
+import { stockServices } from './stockServices';
 import { AuthProvider, useAuth } from './AuthContext';
 import Login from './components/Login';
 import { 
@@ -60,6 +61,7 @@ const AnalystOS = () => {
   const [passingIdeaId, setPassingIdeaId] = useState(null);
   const [passReason, setPassReason] = useState('');
   const [showPassModal, setShowPassModal] = useState(false);
+  const [tickerLookupLoading, setTickerLookupLoading] = useState(false);
 
   // Memo/Model states
   const [newMemoTitle, setNewMemoTitle] = useState('');
@@ -77,6 +79,7 @@ const AnalystOS = () => {
   const [newCompanySector, setNewCompanySector] = useState('');
   const [coverageSearch, setCoverageSearch] = useState('');
   const [coverageFilter, setCoverageFilter] = useState('all'); // all, active, former
+  const [coverageTickerLookupLoading, setCoverageTickerLookupLoading] = useState(false);
 
   // Add company error state
   const [addCompanyError, setAddCompanyError] = useState('');
@@ -311,8 +314,24 @@ const AnalystOS = () => {
     setNewIdeaCompany(e.target.value);
   };
 
-  const handleNewIdeaTickerChange = (e) => {
-    setNewIdeaTicker(e.target.value);
+  const handleNewIdeaTickerChange = async (e) => {
+    const ticker = e.target.value.toUpperCase();
+    setNewIdeaTicker(ticker);
+    
+    // If ticker is at least 1 character, try to look up company name
+    if (ticker.length >= 1) {
+      setTickerLookupLoading(true);
+      try {
+        const result = await stockServices.getCompanyOverview(ticker);
+        if (result.success && result.data.name) {
+          setNewIdeaCompany(result.data.name);
+        }
+      } catch (error) {
+        console.error('Error looking up ticker:', error);
+      } finally {
+        setTickerLookupLoading(false);
+      }
+    }
   };
 
   const handleNewMemoTitleChange = (e) => {
@@ -335,8 +354,29 @@ const AnalystOS = () => {
     setNewCompanyName(e.target.value);
   };
 
-  const handleNewCompanyTickerChange = (e) => {
-    setNewCompanyTicker(e.target.value);
+  const handleNewCompanyTickerChange = async (e) => {
+    const ticker = e.target.value.toUpperCase();
+    setNewCompanyTicker(ticker);
+    
+    // If ticker is at least 1 character, try to look up company info
+    if (ticker.length >= 1) {
+      setCoverageTickerLookupLoading(true);
+      try {
+        const result = await stockServices.getCompanyOverview(ticker);
+        if (result.success && result.data) {
+          if (result.data.name) {
+            setNewCompanyName(result.data.name);
+          }
+          if (result.data.sector) {
+            setNewCompanySector(result.data.sector);
+          }
+        }
+      } catch (error) {
+        console.error('Error looking up ticker:', error);
+      } finally {
+        setCoverageTickerLookupLoading(false);
+      }
+    }
   };
 
   const handleNewCompanySectorChange = (e) => {
@@ -1030,19 +1070,6 @@ const AnalystOS = () => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Company Name
-                      </label>
-                      <input
-                        type="text"
-                        value={newIdeaCompany}
-                        onChange={handleNewIdeaCompanyChange}
-                        className="w-full p-3 border rounded-lg"
-                        placeholder="e.g., Palantir Technologies"
-                        onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Ticker
                       </label>
                       <input
@@ -1051,6 +1078,27 @@ const AnalystOS = () => {
                         onChange={handleNewIdeaTickerChange}
                         className="w-full p-3 border rounded-lg"
                         placeholder="e.g., PLTR"
+                        onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
+                      />
+                      {tickerLookupLoading && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          Looking up company info...
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Company Name
+                        {tickerLookupLoading && (
+                          <span className="ml-2 text-xs text-gray-500">(auto-filled)</span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        value={newIdeaCompany}
+                        onChange={handleNewIdeaCompanyChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., Palantir Technologies"
                         onKeyPress={(e) => e.key === 'Enter' && addPipelineIdea()}
                       />
                     </div>
@@ -1571,7 +1619,28 @@ const AnalystOS = () => {
                     )}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ticker
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompanyTicker}
+                        onChange={handleNewCompanyTickerChange}
+                        className="w-full p-3 border rounded-lg"
+                        placeholder="e.g., AAPL"
+                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
+                      />
+                      {coverageTickerLookupLoading && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          Looking up company info...
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Company Name
+                        {coverageTickerLookupLoading && (
+                          <span className="ml-2 text-xs text-gray-500">(auto-filled)</span>
+                        )}
                       </label>
                       <input
                         type="text"
@@ -1584,20 +1653,10 @@ const AnalystOS = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Ticker
-                      </label>
-                      <input
-                        type="text"
-                        value={newCompanyTicker}
-                        onChange={handleNewCompanyTickerChange}
-                        className="w-full p-3 border rounded-lg"
-                        placeholder="e.g., AAPL"
-                        onKeyPress={(e) => e.key === 'Enter' && addCompany()}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Sector
+                        {coverageTickerLookupLoading && (
+                          <span className="ml-2 text-xs text-gray-500">(auto-filled)</span>
+                        )}
                       </label>
                       <input
                         type="text"
