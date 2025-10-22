@@ -1986,8 +1986,6 @@ const AnalystOS = () => {
             positions={positions}
             transactions={transactions}
             onRefresh={loadDataFromSupabase}
-            debugPortfolios={debugPortfolios}
-            cleanupPortfolios={cleanupPortfolios}
           />
         );
       default:
@@ -2067,73 +2065,6 @@ const AnalystOS = () => {
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 5000);
-  };
-
-  // Debug function to check portfolios
-  const debugPortfolios = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('portfolios')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching portfolios:', error);
-        alert('Error fetching portfolios: ' + error.message);
-      } else {
-        console.log('All portfolios:', data);
-        alert(`Found ${data.length} portfolios:\n${data.map(p => `ID: ${p.id}, Name: ${p.name}, Created: ${p.created_at}`).join('\n')}`);
-      }
-    } catch (error) {
-      console.error('Error in debugPortfolios:', error);
-      alert('Error: ' + error.message);
-    }
-  };
-
-  // Cleanup function to delete all portfolios except the most recent one
-  const cleanupPortfolios = async () => {
-    try {
-      // Get all portfolios ordered by creation date
-      const { data: portfolios, error } = await supabase
-        .from('portfolios')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching portfolios:', error);
-        alert('Error fetching portfolios: ' + error.message);
-        return;
-      }
-      
-      if (portfolios.length <= 1) {
-        alert('No cleanup needed - only one portfolio exists.');
-        return;
-      }
-      
-      // Keep the most recent portfolio, delete the rest
-      const portfoliosToDelete = portfolios.slice(1);
-      const portfolioIdsToDelete = portfoliosToDelete.map(p => p.id);
-      
-      console.log('Deleting portfolios:', portfolioIdsToDelete);
-      
-      // Delete the extra portfolios
-      const { error: deleteError } = await supabase
-        .from('portfolios')
-        .delete()
-        .in('id', portfolioIdsToDelete);
-      
-      if (deleteError) {
-        console.error('Error deleting portfolios:', deleteError);
-        alert('Error deleting portfolios: ' + deleteError.message);
-      } else {
-        alert(`Successfully deleted ${portfoliosToDelete.length} extra portfolios. Kept the most recent one.`);
-        // Refresh the data
-        await loadDataFromSupabase();
-      }
-    } catch (error) {
-      console.error('Error in cleanupPortfolios:', error);
-      alert('Error: ' + error.message);
-    }
   };
 
   return (
