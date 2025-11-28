@@ -1393,3 +1393,84 @@ export const testSupabaseConnection = async () => {
     return { success: false, error };
   }
 }; 
+// Factor exposure helpers
+export const factorExposureServices = {
+  async getLatestExposures(tickers = []) {
+    const today = new Date().toISOString().slice(0, 10);
+    const query = supabase.from('factor_exposures').select('*').lte('date', today).order('date', { ascending: false });
+    if (tickers.length > 0) {
+      query.in('ticker', tickers.map((t) => t.toUpperCase()));
+    }
+    const { data, error } = await query.limit(100);
+    if (error) {
+      console.error('Error loading factor exposures', error);
+      return [];
+    }
+    if (!data || data.length === 0) {
+      return tickers.map((ticker) => ({
+        date: today,
+        ticker,
+        betas: { mkt: 1.0, smb: 0.2, hml: -0.1 },
+      }));
+    }
+    return data;
+  },
+
+  async upsertExposure(row) {
+    const { error } = await supabase.from('factor_exposures').upsert(row, { onConflict: 'date,ticker' });
+    if (error) {
+      console.error('Failed to upsert factor exposure', error);
+    }
+    return { success: !error, error };
+  },
+};
+
+// Regime detection data helpers
+export const regimeServices = {
+  async getRegimes(limit = 5) {
+    const { data, error } = await supabase
+      .from('regimes')
+      .select('*')
+      .order('as_of_date', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching regimes', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      return [
+        {
+          id: 'simulated-regime',
+          as_of_date: today,
+          label: 'Calm Growth',
+          probabilities: { calm: 0.55, stress: 0.25, growth: 0.2 },
+          drivers: { vol: 12, spread: -0.1 },
+        },
+      ];
+    }
+
+    return data;
+  },
+
+  async upsertRegime(entry) {
+    const { error } = await supabase.from('regimes').upsert(entry, { onConflict: 'as_of_date,label' });
+    if (error) {
+      console.error('Failed to upsert regime', error);
+    }
+    return { success: !error, error };
+  },
+
+  async getCurrentProbabilities() {
+    const regimes = await this.getRegimes(1);
+    const latest = regimes[0];
+    const probabilities = latest?.probabilities || { calm: 0.5, stress: 0.3, growth: 0.2 };
+    const normalizedTotal = Object.values(probabilities).reduce((sum, v) => sum + (Number(v) || 0), 0) || 1;
+    const normalized = Object.fromEntries(
+      Object.entries(probabilities).map(([k, v]) => [k, (Number(v) || 0) / normalizedTotal])
+    );
+    return { ...latest, probabilities: normalized };
+  },
+};

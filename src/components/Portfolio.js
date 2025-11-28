@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Plus, BarChart3 } from 'lucide-react';
-import { portfolioServices } from '../supabaseServices';
+import { DollarSign, TrendingUp, Plus, BarChart3, AlertTriangle, TrendingDown } from 'lucide-react';
+import { portfolioServices, factorExposureServices, regimeServices } from '../supabaseServices';
 import { stockServices } from '../stockServices';
+
+const scenarioShocks = {
+  calm: { mkt: -0.01, smb: -0.002, hml: 0.001 },
+  stress: { mkt: -0.05, smb: -0.01, hml: -0.02 },
+  growth: { mkt: 0.02, smb: 0.005, hml: -0.005 },
+};
 
 const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [currentPrices, setCurrentPrices] = useState({});
@@ -16,6 +22,8 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [priceLoading, setPriceLoading] = useState(false);
   const [pricesLoading, setPricesLoading] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [factorContributions, setFactorContributions] = useState([]);
+  const [regimeStress, setRegimeStress] = useState([]);
 
   // Load current prices for all positions
   useEffect(() => {
@@ -67,6 +75,47 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
     loadPrices();
   }, [positions]);
+
+  useEffect(() => {
+    const loadRisk = async () => {
+      if (!positions || positions.length === 0) {
+        setFactorContributions([]);
+        setRegimeStress([]);
+        return;
+      }
+
+      const [exposures, currentRegime] = await Promise.all([
+        factorExposureServices.getLatestExposures(positions.map((p) => p.ticker)),
+        regimeServices.getCurrentProbabilities(),
+      ]);
+
+      const factorTotals = {};
+      exposures.forEach((row) => {
+        Object.entries(row.betas || {}).forEach(([factor, beta]) => {
+          factorTotals[factor] = (factorTotals[factor] || 0) + Number(beta || 0);
+        });
+      });
+
+      const contributions = Object.entries(factorTotals).map(([factor, beta]) => ({
+        factor,
+        beta,
+        weight: beta / (positions.length || 1),
+      }));
+
+      const stresses = Object.entries(currentRegime?.probabilities || {}).map(([label, probability]) => {
+        const shocks = scenarioShocks[label] || scenarioShocks.stress;
+        const expectedShock = Object.entries(factorTotals).reduce((sum, [factor, beta]) => {
+          return sum + beta * (shocks[factor] || 0);
+        }, 0);
+        return { label, probability, expectedShock };
+      });
+
+      setFactorContributions(contributions);
+      setRegimeStress(stresses);
+    };
+
+    loadRisk();
+  }, [positions, currentPrices]);
 
   const handleBuy = async () => {
     if (!buyForm.ticker || !buyForm.shares) {
@@ -452,6 +501,63 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                 {formatCurrency(calculateTotalGainLoss())}
               </p>
             </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm text-gray-500">Factor Contribution</p>
+                <h4 className="text-lg font-semibold">Rolling Betas by Factor</h4>
+              </div>
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+            </div>
+            {factorContributions.length === 0 ? (
+              <p className="text-sm text-gray-500">No factor exposures available yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {factorContributions.map((row) => (
+                  <div key={row.factor} className="flex items-center justify-between p-3 bg-slate-50 rounded-md">
+                    <div>
+                      <p className="text-sm text-gray-600 uppercase">{row.factor}</p>
+                      <p className="text-xl font-semibold">{row.beta.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">Scaled Weight</p>
+                      <p className="font-semibold">{(row.weight * 100).toFixed(1)}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm text-gray-500">Regime Stress</p>
+                <h4 className="text-lg font-semibold">Scenario P&L Shocks</h4>
+              </div>
+              <TrendingDown className="w-5 h-5 text-rose-500" />
+            </div>
+            {regimeStress.length === 0 ? (
+              <p className="text-sm text-gray-500">No regime scenarios available.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {regimeStress.map((scenario) => (
+                  <div key={scenario.label} className="p-3 border rounded-md bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold capitalize">{scenario.label}</p>
+                      <p className="text-sm text-gray-600">Prob: {(scenario.probability * 100).toFixed(1)}%</p>
+                    </div>
+                    <p className={`mt-2 text-lg font-semibold ${scenario.expectedShock < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      Shocked P&L: {(scenario.expectedShock * 100).toFixed(2)}%
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
