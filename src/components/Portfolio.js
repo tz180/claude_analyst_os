@@ -3,6 +3,7 @@ import { DollarSign, TrendingUp, Plus, BarChart3 } from 'lucide-react';
 import { portfolioServices } from '../supabaseServices';
 import { stockServices } from '../stockServices';
 import PortfolioAnalytics from './PortfolioAnalytics';
+import PortfolioValueChart from './PortfolioValueChart';
 
 const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [currentPrices, setCurrentPrices] = useState({});
@@ -169,6 +170,9 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
     }, 0);
   };
 
+  // Fed interest rate for cash (80% of Fed Funds Rate)
+  const CASH_INTEREST_RATE = 0.042; // 4.2% annual
+
   const getPortfolioCash = () => {
     if (portfolio && typeof portfolio.current_cash === 'number' && !Number.isNaN(portfolio.current_cash)) {
       return portfolio.current_cash;
@@ -179,15 +183,34 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
     return fallbackCash;
   };
 
+  // Calculate cash with interest earned
+  const getCashWithInterest = () => {
+    const baseCash = getPortfolioCash();
+    if (!portfolio || !portfolio.created_at) return baseCash;
+
+    // Calculate days since portfolio creation
+    const daysSinceCreation = Math.floor(
+      (new Date() - new Date(portfolio.created_at)) / (1000 * 60 * 60 * 24)
+    );
+    
+    // Daily interest rate
+    const dailyInterestRate = CASH_INTEREST_RATE / 365;
+    
+    // Calculate interest earned (simple interest for now)
+    const interestEarned = baseCash * dailyInterestRate * daysSinceCreation;
+    
+    return baseCash + interestEarned;
+  };
+
   const calculateTotalValue = () => {
     const positionsValue = positions.reduce((total, position) => {
       const value = calculatePositionValue(position);
       return total + (value || 0);
     }, 0);
-    const cashOnHand = getPortfolioCash();
+    const cashWithInterest = getCashWithInterest();
 
-    // Total value = Current market value of positions + Available cash
-    return positionsValue + (typeof cashOnHand === 'number' && !Number.isNaN(cashOnHand) ? cashOnHand : 0);
+    // Total value = Current market value of positions + Available cash + interest earned
+    return positionsValue + (typeof cashWithInterest === 'number' && !Number.isNaN(cashWithInterest) ? cashWithInterest : 0);
   };
 
   const calculateTotalGainLoss = () => {
@@ -419,6 +442,9 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
               <div>
                 <p className="text-sm text-gray-600">Available Cash</p>
                 <p className="text-lg font-semibold">{formatCurrency(calculateAvailableCash())}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  +{formatCurrency(calculateInterestEarned())} interest
+                </p>
               </div>
             </div>
           </div>
@@ -608,6 +634,14 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
           </div>
         )}
       </div>
+
+      {/* Portfolio Value Chart */}
+      <PortfolioValueChart
+        portfolio={portfolio}
+        positions={positions}
+        transactions={transactions}
+        currentPrices={currentPrices}
+      />
 
       {/* Portfolio Analytics */}
       <PortfolioAnalytics 
