@@ -67,9 +67,6 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
     let lastCashUpdateDate = new Date(portfolioStartDate);
     let totalInterestEarned = 0;
     const dailyInterestRate = CASH_INTEREST_RATE / 365;
-    let lastCashUpdateDate = new Date(portfolioStartDate);
-    let totalInterestEarned = 0;
-    const dailyInterestRate = CASH_INTEREST_RATE / 365;
 
     // Process transactions and calculate portfolio value at each point
     while (currentDate <= endDate) {
