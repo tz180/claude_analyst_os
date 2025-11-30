@@ -458,13 +458,6 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
       </div>
 
-      {/* Portfolio Analytics */}
-      <PortfolioAnalytics 
-        positions={positions}
-        transactions={transactions}
-        portfolio={portfolio}
-      />
-
       {/* Positions Table */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex justify-between items-center mb-4">
@@ -615,6 +608,13 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
           </div>
         )}
       </div>
+
+      {/* Portfolio Analytics */}
+      <PortfolioAnalytics 
+        positions={positions}
+        transactions={transactions}
+        portfolio={portfolio}
+      />
 
       {/* Recent Transactions */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
