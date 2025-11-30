@@ -1,30 +1,70 @@
-import React, { useMemo } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Clock, Target, Award, PieChart } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { BarChart3, Clock, Target, PieChart, Globe, Building2, Factory } from 'lucide-react';
+import { stockServices } from '../stockServices';
 
 const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
+  const [companyData, setCompanyData] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  // Fetch company overview data for all positions
+  useEffect(() => {
+    const fetchCompanyData = async () => {
+      if (!positions || positions.length === 0) return;
+
+      setLoading(true);
+      const data = {};
+      const tickers = positions.map(p => p.ticker);
+
+      // Fetch data for all tickers in parallel (paid Alpha Vantage has higher rate limits)
+      const fetchPromises = tickers.map(async (ticker) => {
+        try {
+          const result = await stockServices.getCompanyOverview(ticker);
+          if (result.success && result.data) {
+            return {
+              ticker,
+              data: {
+                sector: result.data.sector || 'Unknown',
+                industry: result.data.industry || 'Unknown',
+                country: result.data.country || 'Unknown',
+                name: result.data.name || ticker
+              }
+            };
+          }
+        } catch (error) {
+          console.error(`Error fetching data for ${ticker}:`, error);
+        }
+        return {
+          ticker,
+          data: {
+            sector: 'Unknown',
+            industry: 'Unknown',
+            country: 'Unknown',
+            name: ticker
+          }
+        };
+      });
+
+      // Wait for all requests to complete
+      const results = await Promise.all(fetchPromises);
+      results.forEach(({ ticker, data: tickerData }) => {
+        data[ticker] = tickerData;
+      });
+
+      setCompanyData(data);
+      setLoading(false);
+    };
+
+    fetchCompanyData();
+  }, [positions]);
+
   const analytics = useMemo(() => {
     if (!positions || positions.length === 0) {
       return null;
     }
 
-    // Calculate win rate
-    const winningPositions = positions.filter(p => {
-      // This will be calculated when we have current prices
-      return true; // Placeholder
-    });
-
     // Calculate average position size
     const totalInvested = positions.reduce((sum, p) => sum + (p.shares * p.average_price), 0);
     const avgPositionSize = positions.length > 0 ? totalInvested / positions.length : 0;
-
-    // Calculate largest and smallest positions
-    const positionSizes = positions.map(p => ({
-      ticker: p.ticker,
-      size: p.shares * p.average_price
-    })).sort((a, b) => b.size - a.size);
-
-    const largestPosition = positionSizes[0];
-    const smallestPosition = positionSizes[positionSizes.length - 1];
 
     // Calculate transaction statistics
     const buyTransactions = transactions.filter(t => t.transaction_type === 'buy');
@@ -34,8 +74,7 @@ const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
       ? transactions.reduce((sum, t) => sum + t.total_amount, 0) / transactions.length
       : 0;
 
-    // Calculate holding periods (for sold positions, we'd need more data)
-    // For now, calculate based on when positions were created
+    // Calculate holding periods
     const positionsWithAge = positions.map(p => {
       const positionTransactions = transactions.filter(t => t.ticker === p.ticker);
       if (positionTransactions.length > 0) {
@@ -54,29 +93,64 @@ const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
       ? positionsWithAge.reduce((sum, p) => sum + p.daysHeld, 0) / positionsWithAge.length
       : 0;
 
-    // Calculate portfolio concentration
+    // Calculate turnover
     const totalValue = positions.reduce((sum, p) => sum + (p.shares * p.average_price), 0);
-    const concentration = largestPosition ? (largestPosition.size / totalValue) * 100 : 0;
-
-    // Calculate turnover (simplified - total transaction volume / portfolio value)
     const totalTransactionVolume = transactions.reduce((sum, t) => sum + Math.abs(t.total_amount), 0);
     const turnover = totalValue > 0 ? (totalTransactionVolume / totalValue) * 100 : 0;
 
+    // Group by sector
+    const sectorGroups = {};
+    positions.forEach(p => {
+      const positionValue = p.shares * p.average_price;
+      const sector = companyData[p.ticker]?.sector || 'Unknown';
+      if (!sectorGroups[sector]) {
+        sectorGroups[sector] = { value: 0, count: 0, tickers: [] };
+      }
+      sectorGroups[sector].value += positionValue;
+      sectorGroups[sector].count += 1;
+      sectorGroups[sector].tickers.push(p.ticker);
+    });
+
+    // Group by industry
+    const industryGroups = {};
+    positions.forEach(p => {
+      const positionValue = p.shares * p.average_price;
+      const industry = companyData[p.ticker]?.industry || 'Unknown';
+      if (!industryGroups[industry]) {
+        industryGroups[industry] = { value: 0, count: 0, tickers: [] };
+      }
+      industryGroups[industry].value += positionValue;
+      industryGroups[industry].count += 1;
+      industryGroups[industry].tickers.push(p.ticker);
+    });
+
+    // Group by country
+    const countryGroups = {};
+    positions.forEach(p => {
+      const positionValue = p.shares * p.average_price;
+      const country = companyData[p.ticker]?.country || 'Unknown';
+      if (!countryGroups[country]) {
+        countryGroups[country] = { value: 0, count: 0, tickers: [] };
+      }
+      countryGroups[country].value += positionValue;
+      countryGroups[country].count += 1;
+      countryGroups[country].tickers.push(p.ticker);
+    });
+
     return {
-      totalPositions: positions.length,
       totalInvested,
       avgPositionSize,
-      largestPosition,
-      smallestPosition,
       buyTransactions: buyTransactions.length,
       sellTransactions: sellTransactions.length,
       totalTransactions,
       avgTransactionSize,
       avgHoldingPeriod,
-      concentration,
-      turnover
+      turnover,
+      sectorGroups,
+      industryGroups,
+      countryGroups
     };
-  }, [positions, transactions]);
+  }, [positions, transactions, companyData]);
 
   if (!analytics) {
     return (
@@ -101,6 +175,18 @@ const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
     }).format(amount);
   };
 
+  const formatPercentage = (value, total) => {
+    return ((value / total) * 100).toFixed(1);
+  };
+
+  // Sort groups by value (descending)
+  const sortedSectors = Object.entries(analytics.sectorGroups)
+    .sort((a, b) => b[1].value - a[1].value);
+  const sortedIndustries = Object.entries(analytics.industryGroups)
+    .sort((a, b) => b[1].value - a[1].value);
+  const sortedCountries = Object.entries(analytics.countryGroups)
+    .sort((a, b) => b[1].value - a[1].value);
+
   return (
     <div className="space-y-6">
       {/* Overview Stats */}
@@ -110,10 +196,6 @@ const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
           Portfolio Overview
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Total Positions</p>
-            <p className="text-2xl font-bold text-blue-600">{analytics.totalPositions}</p>
-          </div>
           <div className="text-center p-4 bg-green-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Invested</p>
             <p className="text-2xl font-bold text-green-600">{formatCurrency(analytics.totalInvested)}</p>
@@ -126,53 +208,142 @@ const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
             <p className="text-sm text-gray-600 mb-1">Avg Holding Period</p>
             <p className="text-2xl font-bold text-orange-600">{Math.round(analytics.avgHoldingPeriod)} days</p>
           </div>
+          <div className="text-center p-4 bg-indigo-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Portfolio Turnover</p>
+            <p className="text-2xl font-bold text-indigo-600">{analytics.turnover.toFixed(1)}%</p>
+          </div>
         </div>
       </div>
 
-      {/* Position Analysis */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h4 className="text-md font-semibold mb-4 flex items-center">
-            <TrendingUp className="mr-2" size={18} />
-            Largest Position
-          </h4>
-          {analytics.largestPosition && (
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">{analytics.largestPosition.ticker}</span>
-                <span className="text-lg font-semibold text-blue-600">
-                  {formatCurrency(analytics.largestPosition.size)}
-                </span>
+      {/* Sector Allocation */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h4 className="text-md font-semibold mb-4 flex items-center">
+          <Building2 className="mr-2" size={18} />
+          Sector Allocation
+        </h4>
+        {loading ? (
+          <div className="text-center py-4 text-gray-500">
+            <p>Loading sector data...</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedSectors.map(([sector, data]) => (
+              <div key={sector}>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-900">{sector}</span>
+                    <span className="text-xs text-gray-500">({data.count} {data.count === 1 ? 'position' : 'positions'})</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold">{formatCurrency(data.value)}</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {formatPercentage(data.value, analytics.totalInvested)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full"
+                    style={{ width: `${formatPercentage(data.value, analytics.totalInvested)}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {data.tickers.join(', ')}
+                </div>
               </div>
-              <div className="text-sm text-gray-600">
-                {((analytics.largestPosition.size / analytics.totalInvested) * 100).toFixed(1)}% of portfolio
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h4 className="text-md font-semibold mb-4 flex items-center">
-            <TrendingDown className="mr-2" size={18} />
-            Smallest Position
-          </h4>
-          {analytics.smallestPosition && (
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">{analytics.smallestPosition.ticker}</span>
-                <span className="text-lg font-semibold text-gray-600">
-                  {formatCurrency(analytics.smallestPosition.size)}
-                </span>
-              </div>
-              <div className="text-sm text-gray-600">
-                {((analytics.smallestPosition.size / analytics.totalInvested) * 100).toFixed(1)}% of portfolio
-              </div>
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Transaction Analysis */}
+      {/* Industry Allocation */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h4 className="text-md font-semibold mb-4 flex items-center">
+          <Factory className="mr-2" size={18} />
+          Industry Allocation
+        </h4>
+        {loading ? (
+          <div className="text-center py-4 text-gray-500">
+            <p>Loading industry data...</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedIndustries.slice(0, 10).map(([industry, data]) => (
+              <div key={industry}>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-900">{industry}</span>
+                    <span className="text-xs text-gray-500">({data.count} {data.count === 1 ? 'position' : 'positions'})</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold">{formatCurrency(data.value)}</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {formatPercentage(data.value, analytics.totalInvested)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-green-600 h-2 rounded-full"
+                    style={{ width: `${formatPercentage(data.value, analytics.totalInvested)}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {data.tickers.join(', ')}
+                </div>
+              </div>
+            ))}
+            {sortedIndustries.length > 10 && (
+              <p className="text-xs text-gray-500 mt-2">
+                Showing top 10 industries (out of {sortedIndustries.length} total)
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Geographic Allocation */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h4 className="text-md font-semibold mb-4 flex items-center">
+          <Globe className="mr-2" size={18} />
+          Geographic Allocation
+        </h4>
+        {loading ? (
+          <div className="text-center py-4 text-gray-500">
+            <p>Loading country data...</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedCountries.map(([country, data]) => (
+              <div key={country}>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-900">{country}</span>
+                    <span className="text-xs text-gray-500">({data.count} {data.count === 1 ? 'position' : 'positions'})</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold">{formatCurrency(data.value)}</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {formatPercentage(data.value, analytics.totalInvested)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-purple-600 h-2 rounded-full"
+                    style={{ width: `${formatPercentage(data.value, analytics.totalInvested)}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {data.tickers.join(', ')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Transaction Activity */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h4 className="text-md font-semibold mb-4 flex items-center">
           <Clock className="mr-2" size={18} />
@@ -197,94 +368,8 @@ const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
           </div>
         </div>
       </div>
-
-      {/* Portfolio Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h4 className="text-md font-semibold mb-4 flex items-center">
-            <PieChart className="mr-2" size={18} />
-            Portfolio Concentration
-          </h4>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-sm text-gray-600">Largest Position</span>
-                <span className="text-sm font-semibold">{analytics.concentration.toFixed(1)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full"
-                  style={{ width: `${Math.min(analytics.concentration, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500">
-              {analytics.concentration > 25
-                ? '⚠️ High concentration - consider diversifying'
-                : analytics.concentration > 15
-                ? 'Moderate concentration'
-                : 'Well diversified'}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h4 className="text-md font-semibold mb-4 flex items-center">
-            <Target className="mr-2" size={18} />
-            Portfolio Turnover
-          </h4>
-          <div className="space-y-3">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-indigo-600">{analytics.turnover.toFixed(1)}%</p>
-              <p className="text-sm text-gray-600 mt-2">Annualized turnover rate</p>
-            </div>
-            <p className="text-xs text-gray-500">
-              {analytics.turnover > 100
-                ? 'High turnover - active trading strategy'
-                : analytics.turnover > 50
-                ? 'Moderate turnover'
-                : 'Low turnover - buy and hold strategy'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Position Size Distribution */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h4 className="text-md font-semibold mb-4 flex items-center">
-          <BarChart3 className="mr-2" size={18} />
-          Position Size Distribution
-        </h4>
-        <div className="space-y-2">
-          {positions
-            .map(p => ({
-              ticker: p.ticker,
-              size: p.shares * p.average_price,
-              percentage: ((p.shares * p.average_price) / analytics.totalInvested) * 100
-            }))
-            .sort((a, b) => b.size - a.size)
-            .map((pos, idx) => (
-              <div key={pos.ticker} className="flex items-center space-x-3">
-                <div className="w-12 text-sm font-medium text-gray-700">{pos.ticker}</div>
-                <div className="flex-1">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>{formatCurrency(pos.size)}</span>
-                    <span className="text-gray-500">{pos.percentage.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-indigo-600 h-2 rounded-full"
-                      style={{ width: `${pos.percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
     </div>
   );
 };
 
 export default PortfolioAnalytics;
-
