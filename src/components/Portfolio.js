@@ -183,10 +183,10 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
     return fallbackCash;
   };
 
-  // Calculate cash with interest earned
-  const getCashWithInterest = () => {
+  // Calculate interest earned on cash
+  const calculateInterestEarned = () => {
     const baseCash = getPortfolioCash();
-    if (!portfolio || !portfolio.created_at) return baseCash;
+    if (!portfolio || !portfolio.created_at) return 0;
 
     // Calculate days since portfolio creation
     const daysSinceCreation = Math.floor(
@@ -197,9 +197,13 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
     const dailyInterestRate = CASH_INTEREST_RATE / 365;
     
     // Calculate interest earned (simple interest for now)
-    const interestEarned = baseCash * dailyInterestRate * daysSinceCreation;
-    
-    return baseCash + interestEarned;
+    return baseCash * dailyInterestRate * daysSinceCreation;
+  };
+
+  // Calculate cash with interest earned
+  const getCashWithInterest = () => {
+    const baseCash = getPortfolioCash();
+    return baseCash + calculateInterestEarned();
   };
 
   const calculateTotalValue = () => {
@@ -230,10 +234,9 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
     return ((totalValue - startingValue) / startingValue) * 100;
   };
 
-  // Calculate available cash using portfolio cash balance with fallback to starting cash math
+  // Calculate available cash using portfolio cash balance with interest
   const calculateAvailableCash = () => {
-    const cashOnHand = getPortfolioCash();
-    return typeof cashOnHand === 'number' && !Number.isNaN(cashOnHand) ? cashOnHand : 0;
+    return getCashWithInterest();
   };
 
   // Sorting function
