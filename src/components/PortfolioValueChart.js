@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, Calendar } from 'lucide-react';
 import { stockServices } from '../stockServices';
+import { historicalPriceServices } from '../supabaseServices';
 
 // Fed interest rates (approximate - you could fetch this from an API)
 // Using current Fed Funds Rate as base for cash interest
@@ -12,9 +13,109 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
   const [selectedPeriod, setSelectedPeriod] = useState('1Y');
   const [historicalData, setHistoricalData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [historicalPrices, setHistoricalPrices] = useState({}); // { ticker: [{ date, price }] }
+
+  // Fetch historical prices for all positions
+  useEffect(() => {
+    const fetchHistoricalPrices = async () => {
+      if (!positions || positions.length === 0) {
+        setHistoricalPrices({});
+        return;
+      }
+
+      setLoading(true);
+      const priceMap = {};
+
+      // Get unique tickers from positions
+      const tickers = [...new Set(positions.map(p => p.ticker))];
+
+      // Calculate date range we need (last 5 years should be enough)
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date();
+      startDate.setFullYear(startDate.getFullYear() - 5);
+      const startDateStr = startDate.toISOString().split('T')[0];
+
+      // Fetch historical prices for each ticker
+      for (const ticker of tickers) {
+        try {
+          // First, try to get from database
+          let prices = [];
+          const dbResult = await historicalPriceServices.getHistoricalPrices(ticker, startDateStr, endDate);
+          
+          if (dbResult.success && dbResult.data && dbResult.data.length > 0) {
+            // We have data in the database, use it
+            prices = dbResult.data;
+            console.log(`Loaded ${prices.length} historical prices for ${ticker} from database`);
+          } else {
+            // No data in database, fetch from API
+            console.log(`No database cache for ${ticker}, fetching from API...`);
+            const apiResult = await stockServices.getHistoricalPrices(ticker, 'full');
+            
+            if (apiResult.success && apiResult.data) {
+              prices = apiResult.data;
+              
+              // Store in database for future use
+              const storeResult = await historicalPriceServices.storeHistoricalPrices(ticker, prices);
+              if (storeResult.success) {
+                console.log(`Stored ${prices.length} historical prices for ${ticker} in database`);
+              } else {
+                console.warn(`Failed to store historical prices for ${ticker}:`, storeResult.error);
+              }
+            } else {
+              console.warn(`Failed to fetch historical prices for ${ticker} from API:`, apiResult.error);
+            }
+          }
+
+          // Create a map for quick lookup: date -> price
+          if (prices.length > 0) {
+            const priceByDate = {};
+            prices.forEach(({ date, price }) => {
+              priceByDate[date] = price;
+            });
+            priceMap[ticker] = priceByDate;
+          } else {
+            priceMap[ticker] = {};
+          }
+        } catch (error) {
+          console.error(`Error fetching historical prices for ${ticker}:`, error);
+          priceMap[ticker] = {};
+        }
+      }
+
+      setHistoricalPrices(priceMap);
+      setLoading(false);
+    };
+
+    fetchHistoricalPrices();
+  }, [positions]);
 
   // Calculate portfolio value over time
   const calculatePortfolioHistory = useMemo(() => {
+    // Helper function to get price for a ticker on a specific date
+    const getPriceForDate = (ticker, dateStr) => {
+      // First try historical prices
+      if (historicalPrices[ticker] && historicalPrices[ticker][dateStr]) {
+        return historicalPrices[ticker][dateStr];
+      }
+      
+      // If no historical price for exact date, find the most recent price before or on that date
+      if (historicalPrices[ticker]) {
+        const dates = Object.keys(historicalPrices[ticker]).sort().reverse();
+        for (const date of dates) {
+          if (date <= dateStr) {
+            return historicalPrices[ticker][date];
+          }
+        }
+      }
+      
+      // Fallback to current price if available
+      if (currentPrices[ticker]) {
+        return currentPrices[ticker];
+      }
+      
+      // Last resort: return null (will use average cost)
+      return null;
+    };
     if (!portfolio || !transactions || transactions.length === 0) {
       return [];
     }
@@ -120,8 +221,8 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
       let positionsValue = 0;
       Object.entries(positionHistory).forEach(([ticker, pos]) => {
         if (pos.shares > 0) {
-          // Use current price if available, otherwise use average cost
-          const price = currentPrices[ticker] || (pos.totalCost / pos.shares);
+          // Use historical price for this date, fallback to average cost
+          const price = getPriceForDate(ticker, dateStr) || (pos.totalCost / pos.shares);
           positionsValue += pos.shares * price;
         }
       });
@@ -150,7 +251,7 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
     }
 
     return dataPoints;
-  }, [portfolio, transactions, selectedPeriod, currentPrices]);
+  }, [portfolio, transactions, selectedPeriod, currentPrices, historicalPrices]);
 
   useEffect(() => {
     setHistoricalData(calculatePortfolioHistory);
@@ -236,8 +337,17 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
           Portfolio Value Over Time
         </h3>
         <div className="text-center py-8 text-gray-500">
-          <p>No transaction history available yet.</p>
-          <p className="text-sm mt-2">Make some trades to see your portfolio value chart!</p>
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p>Loading historical price data...</p>
+            </>
+          ) : (
+            <>
+              <p>No transaction history available yet.</p>
+              <p className="text-sm mt-2">Make some trades to see your portfolio value chart!</p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -364,7 +474,8 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
 
       <div className="mt-4 text-xs text-gray-500">
         <p>Cash interest calculated at {(CASH_INTEREST_RATE * 100).toFixed(2)}% annual rate (based on Fed Funds Rate).</p>
-        <p>Historical values use current prices for positions; actual historical values may vary.</p>
+        <p>Historical values use actual historical stock prices to show portfolio value fluctuations over time.</p>
+        {loading && <p className="text-blue-600 mt-1">Loading historical price data...</p>}
       </div>
     </div>
   );

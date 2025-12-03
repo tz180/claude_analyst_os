@@ -1474,3 +1474,124 @@ export const regimeServices = {
     return { ...latest, probabilities: normalized };
   },
 };
+
+// Historical Stock Prices Services
+export const historicalPriceServices = {
+  // Get historical prices for a ticker from the database
+  async getHistoricalPrices(ticker, startDate = null, endDate = null) {
+    try {
+      let query = supabase
+        .from('historical_stock_prices')
+        .select('*')
+        .eq('ticker', ticker.toUpperCase())
+        .order('date', { ascending: true });
+
+      if (startDate) {
+        query = query.gte('date', startDate);
+      }
+      if (endDate) {
+        query = query.lte('date', endDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error(`Error fetching historical prices for ${ticker}:`, error);
+        return { success: false, error: error.message, data: [] };
+      }
+
+      return {
+        success: true,
+        data: (data || []).map(row => ({
+          date: row.date,
+          price: parseFloat(row.price),
+          open: row.open ? parseFloat(row.open) : null,
+          high: row.high ? parseFloat(row.high) : null,
+          low: row.low ? parseFloat(row.low) : null,
+          volume: row.volume ? parseInt(row.volume) : null
+        }))
+      };
+    } catch (error) {
+      console.error(`Error in getHistoricalPrices for ${ticker}:`, error);
+      return { success: false, error: error.message, data: [] };
+    }
+  },
+
+  // Store historical prices in the database
+  async storeHistoricalPrices(ticker, prices) {
+    try {
+      if (!prices || prices.length === 0) {
+        return { success: false, error: 'No prices to store' };
+      }
+
+      // Prepare data for upsert
+      const records = prices.map(({ date, price, open, high, low, volume }) => ({
+        ticker: ticker.toUpperCase(),
+        date: date,
+        price: price,
+        open: open || null,
+        high: high || null,
+        low: low || null,
+        volume: volume || null
+      }));
+
+      // Upsert in batches to avoid overwhelming the database
+      const batchSize = 100;
+      const errors = [];
+
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from('historical_stock_prices')
+          .upsert(batch, { onConflict: 'ticker,date' });
+
+        if (error) {
+          console.error(`Error storing batch ${i / batchSize + 1} for ${ticker}:`, error);
+          errors.push(error);
+        }
+      }
+
+      if (errors.length > 0) {
+        return { success: false, error: errors[0].message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error(`Error storing historical prices for ${ticker}:`, error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Check what date range we have in the database for a ticker
+  async getDateRange(ticker) {
+    try {
+      const { data, error } = await supabase
+        .from('historical_stock_prices')
+        .select('date')
+        .eq('ticker', ticker.toUpperCase())
+        .order('date', { ascending: true })
+        .limit(1);
+
+      if (error || !data || data.length === 0) {
+        return { success: false, earliestDate: null, latestDate: null };
+      }
+
+      const earliestDate = data[0].date;
+
+      // Get latest date
+      const { data: latestData, error: latestError } = await supabase
+        .from('historical_stock_prices')
+        .select('date')
+        .eq('ticker', ticker.toUpperCase())
+        .order('date', { ascending: false })
+        .limit(1);
+
+      const latestDate = latestData && latestData.length > 0 ? latestData[0].date : null;
+
+      return { success: true, earliestDate, latestDate };
+    } catch (error) {
+      console.error(`Error getting date range for ${ticker}:`, error);
+      return { success: false, earliestDate: null, latestDate: null };
+    }
+  }
+};

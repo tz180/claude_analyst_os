@@ -374,45 +374,6 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
               <Plus size={16} className="mr-2" />
               Buy Stock
             </button>
-            <button
-              onClick={async () => {
-                setPricesLoading(true);
-                const pricePromises = positions.map(async (position) => {
-                  try {
-                    const priceData = await stockServices.getStockPrice(position.ticker);
-                    return { 
-                      ticker: position.ticker, 
-                      price: priceData?.price || null,
-                      change: priceData?.change || null,
-                      changePercent: priceData?.changePercent || null
-                    };
-                  } catch (error) {
-                    console.error(`Error loading price for ${position.ticker}:`, error);
-                    return { ticker: position.ticker, price: null, change: null, changePercent: null };
-                  }
-                });
-
-                const prices = await Promise.all(pricePromises);
-                const priceMap = {};
-                const changeMap = {};
-                prices.forEach(({ ticker, price, change, changePercent }) => {
-                  priceMap[ticker] = price;
-                  changeMap[ticker] = { change, changePercent };
-                });
-                setCurrentPrices(priceMap);
-                setPriceChanges(changeMap);
-                setPricesLoading(false);
-              }}
-              className="bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600 transition-colors flex items-center"
-              disabled={pricesLoading}
-            >
-              {pricesLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <TrendingUp size={16} className="mr-2" />
-              )}
-              Refresh Prices
-            </button>
           </div>
         </div>
 

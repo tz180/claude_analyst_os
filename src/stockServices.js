@@ -479,5 +479,55 @@ export const stockServices = {
       console.error('Error fetching earnings calendar:', error);
       return { success: false, error: error.message };
     }
+  },
+
+  // Get historical daily prices
+  async getHistoricalPrices(symbol, outputsize = 'full') {
+    if (!ALPHA_VANTAGE_API_KEY) {
+      return { success: false, error: 'Alpha Vantage API key not configured' };
+    }
+
+    try {
+      const response = await fetch(
+        `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=${outputsize}&apikey=${ALPHA_VANTAGE_API_KEY}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data['Error Message']) {
+        return { success: false, error: data['Error Message'] };
+      }
+      
+      if (data['Note']) {
+        return { success: false, error: 'API rate limit exceeded. Please try again later.' };
+      }
+      
+      const timeSeries = data['Time Series (Daily)'];
+      if (!timeSeries) {
+        return { success: false, error: 'No historical data found' };
+      }
+      
+      // Convert to array of { date, price } sorted by date
+      const prices = Object.entries(timeSeries).map(([date, values]) => ({
+        date: date,
+        price: parseFloat(values['4. close']),
+        open: parseFloat(values['1. open']),
+        high: parseFloat(values['2. high']),
+        low: parseFloat(values['3. low']),
+        volume: parseInt(values['5. volume'])
+      })).sort((a, b) => a.date.localeCompare(b.date));
+      
+      return {
+        success: true,
+        data: prices
+      };
+    } catch (error) {
+      console.error('Error fetching historical prices:', error);
+      return { success: false, error: error.message };
+    }
   }
 };
