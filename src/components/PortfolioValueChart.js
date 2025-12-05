@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, Calendar } from 'lucide-react';
 import { stockServices } from '../stockServices';
-import { historicalPriceServices } from '../supabaseServices';
+import { historicalPriceServices, historicalPortfolioValueServices } from '../supabaseServices';
 
 // Fed interest rates (approximate - you could fetch this from an API)
 // Using current Fed Funds Rate as base for cash interest
@@ -14,6 +14,7 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
   const [historicalData, setHistoricalData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [historicalPrices, setHistoricalPrices] = useState({}); // { ticker: [{ date, price }] }
+  const [storedHistoricalValues, setStoredHistoricalValues] = useState([]); // Pre-calculated portfolio values from DB
 
   // Fetch historical prices for all positions
   useEffect(() => {
@@ -70,10 +71,16 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
           if (prices.length > 0) {
             const priceByDate = {};
             prices.forEach(({ date, price }) => {
-              priceByDate[date] = price;
+              // Ensure date is in YYYY-MM-DD format (handle both date strings and Date objects)
+              const dateStr = typeof date === 'string' ? date.split('T')[0] : new Date(date).toISOString().split('T')[0];
+              priceByDate[dateStr] = price;
             });
             priceMap[ticker] = priceByDate;
+            const dateKeys = Object.keys(priceByDate).sort();
+            console.log(`✓ Mapped ${prices.length} prices for ${ticker}, date range: ${dateKeys[0]} to ${dateKeys[dateKeys.length - 1]}`);
+            console.log(`  Sample dates: ${dateKeys.slice(0, 3).join(', ')}, ... ${dateKeys.slice(-3).join(', ')}`);
           } else {
+            console.warn(`⚠ No prices loaded for ${ticker}`);
             priceMap[ticker] = {};
           }
         } catch (error) {
@@ -84,36 +91,135 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
 
       setHistoricalPrices(priceMap);
       setLoading(false);
+      console.log('Historical prices loaded:', Object.keys(priceMap).length, 'tickers');
     };
 
     fetchHistoricalPrices();
   }, [positions]);
 
-  // Calculate portfolio value over time
-  const calculatePortfolioHistory = useMemo(() => {
-    // Helper function to get price for a ticker on a specific date
-    const getPriceForDate = (ticker, dateStr) => {
-      // First try historical prices
-      if (historicalPrices[ticker] && historicalPrices[ticker][dateStr]) {
-        return historicalPrices[ticker][dateStr];
+  // Fetch pre-calculated historical portfolio values from database
+  useEffect(() => {
+    const fetchStoredHistoricalValues = async () => {
+      if (!portfolio?.id) {
+        setStoredHistoricalValues([]);
+        return;
       }
-      
-      // If no historical price for exact date, find the most recent price before or on that date
-      if (historicalPrices[ticker]) {
-        const dates = Object.keys(historicalPrices[ticker]).sort().reverse();
-        for (const date of dates) {
-          if (date <= dateStr) {
-            return historicalPrices[ticker][date];
-          }
+
+      try {
+        // Calculate date range based on selected period
+        let startDate = null;
+        const endDate = new Date().toISOString().split('T')[0];
+        
+        switch (selectedPeriod) {
+          case '1M':
+            const oneMonthAgo = new Date();
+            oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+            startDate = oneMonthAgo.toISOString().split('T')[0];
+            break;
+          case '3M':
+            const threeMonthsAgo = new Date();
+            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+            startDate = threeMonthsAgo.toISOString().split('T')[0];
+            break;
+          case '6M':
+            const sixMonthsAgo = new Date();
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+            startDate = sixMonthsAgo.toISOString().split('T')[0];
+            break;
+          case 'YTD':
+            startDate = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+            break;
+          case '1Y':
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            startDate = oneYearAgo.toISOString().split('T')[0];
+            break;
+          case '5Y':
+            const fiveYearsAgo = new Date();
+            fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+            startDate = fiveYearsAgo.toISOString().split('T')[0];
+            break;
         }
+
+        const result = await historicalPortfolioValueServices.getHistoricalValues(
+          portfolio.id,
+          startDate,
+          endDate
+        );
+
+        if (result.success && result.data && result.data.length > 0) {
+          // Transform the data to match the chart format
+          const chartData = result.data.map(item => ({
+            date: item.date,
+            totalValue: item.totalValue,
+            positionsValue: item.positionsValue,
+            cash: item.cash,
+            cashWithInterest: item.cash + item.interestEarned,
+            interestEarned: item.interestEarned
+          }));
+          
+          setStoredHistoricalValues(chartData);
+          console.log(`✓ Loaded ${chartData.length} stored historical portfolio values from database`);
+        } else {
+          console.log('No stored historical portfolio values found, will calculate on the fly');
+          setStoredHistoricalValues([]);
+        }
+      } catch (error) {
+        console.error('Error fetching stored historical portfolio values:', error);
+        setStoredHistoricalValues([]);
       }
-      
-      // Fallback to current price if available
-      if (currentPrices[ticker]) {
+    };
+
+    fetchStoredHistoricalValues();
+  }, [portfolio?.id, selectedPeriod]);
+
+  // Calculate portfolio value over time (fallback if no stored values)
+  const calculatePortfolioHistory = useMemo(() => {
+    // Don't calculate if we're still loading historical prices
+    if (loading) {
+      return [];
+    }
+    
+    // Helper function to get price for a ticker on a specific date
+    // Returns the closing price for that date (or most recent trading day before it)
+    const getPriceForDate = (ticker, dateStr, isTodayDate) => {
+      // For today, use current prices
+      if (isTodayDate && currentPrices[ticker]) {
         return currentPrices[ticker];
       }
       
-      // Last resort: return null (will use average cost)
+      // For historical dates, use historical closing prices
+      if (!historicalPrices[ticker] || Object.keys(historicalPrices[ticker]).length === 0) {
+        // No historical prices available for this ticker
+        return null;
+      }
+      
+      // Ensure dateStr is in YYYY-MM-DD format
+      const normalizedDateStr = dateStr.split('T')[0];
+      
+      // First try exact date match (for trading days)
+      if (historicalPrices[ticker][normalizedDateStr]) {
+        return historicalPrices[ticker][normalizedDateStr];
+      }
+      
+      // If no exact match (weekend/holiday), find the most recent trading day before or on that date
+      // Sort dates in descending order to find the most recent one
+      const dates = Object.keys(historicalPrices[ticker]).sort().reverse();
+      for (const date of dates) {
+        if (date <= normalizedDateStr) {
+          // Found the most recent trading day before or on this date
+          return historicalPrices[ticker][date];
+        }
+      }
+      
+      // If we get here, all historical prices are after this date
+      // This means the date we're looking for is before any historical data we have
+      // Return the earliest available price as a fallback
+      if (dates.length > 0) {
+        const earliestDate = dates[dates.length - 1];
+        return historicalPrices[ticker][earliestDate];
+      }
+      
       return null;
     };
     if (!portfolio || !transactions || transactions.length === 0) {
@@ -170,8 +276,16 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
     const dailyInterestRate = CASH_INTEREST_RATE / 365;
 
     // Process transactions and calculate portfolio value at each point
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    let isToday = false;
+    
+    console.log(`📅 Chart calculation: Today is ${todayStr}, Start date: ${actualStartDate.toISOString().split('T')[0]}, End date: ${endDate.toISOString().split('T')[0]}`);
+    console.log(`📊 Historical prices loaded for tickers:`, Object.keys(historicalPrices));
+    
     while (currentDate <= endDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
+      isToday = dateStr === todayStr;
       
       // Process transactions that occurred on or before this date
       while (transactionIndex < sortedTransactions.length) {
@@ -218,27 +332,90 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
       const currentInterestEarned = totalInterestEarned + interestSinceLastUpdate;
 
       // Calculate portfolio value at this date
+      // Formula: Sum of (shares owned * closing price on that date) for each position
       let positionsValue = 0;
+      const currentIsToday = isToday; // Capture isToday for use in forEach
+      const positionDetails = []; // Track individual position values for debugging
+      
       Object.entries(positionHistory).forEach(([ticker, pos]) => {
         if (pos.shares > 0) {
-          // Use historical price for this date, fallback to average cost
-          const price = getPriceForDate(ticker, dateStr) || (pos.totalCost / pos.shares);
-          positionsValue += pos.shares * price;
+          // Get the closing price for this date (or most recent trading day)
+          const closingPrice = getPriceForDate(ticker, dateStr, currentIsToday);
+          
+          let positionValue = 0;
+          if (closingPrice !== null && closingPrice > 0) {
+            // Use the actual closing price: shares * closing price
+            positionValue = pos.shares * closingPrice;
+            positionsValue += positionValue;
+            positionDetails.push({ ticker, shares: pos.shares, price: closingPrice, value: positionValue });
+          } else {
+            // Fallback: if no historical price available, use average cost
+            // This should only happen if historical prices haven't loaded yet
+            const avgCost = pos.totalCost / pos.shares;
+            positionValue = pos.shares * avgCost;
+            positionsValue += positionValue;
+            
+            // Log warning if we expected to have historical prices
+            if (!currentIsToday && historicalPrices[ticker] && Object.keys(historicalPrices[ticker]).length > 0) {
+              const availableDates = Object.keys(historicalPrices[ticker]).sort();
+              console.warn(`⚠ Using average cost for ${ticker} on ${dateStr} - no price found. First available: ${availableDates[0]}, Last: ${availableDates[availableDates.length - 1]}`);
+            }
+          }
         }
       });
+      
+      // Debug: Log positions value calculation for first few dates to verify historical prices are being used
+      if (dataPoints.length < 5) {
+        console.log(`📊 ${dateStr} - Positions Value: $${positionsValue.toLocaleString()}, Details:`, positionDetails);
+        // Also log what prices were found
+        Object.entries(positionHistory).forEach(([ticker, pos]) => {
+          if (pos.shares > 0) {
+            const price = getPriceForDate(ticker, dateStr, currentIsToday);
+            const hasHistorical = historicalPrices[ticker] && Object.keys(historicalPrices[ticker]).length > 0;
+            const avgCost = pos.totalCost / pos.shares;
+            const usedPrice = price !== null ? price : avgCost;
+            const positionValue = pos.shares * usedPrice;
+            
+            if (hasHistorical) {
+              const availableDates = Object.keys(historicalPrices[ticker]).sort();
+              const firstDate = availableDates[0];
+              const lastDate = availableDates[availableDates.length - 1];
+              console.log(`  ${ticker}: ${pos.shares} shares × $${usedPrice.toFixed(2)} = $${positionValue.toLocaleString()}`);
+              console.log(`    Historical prices available: ${availableDates.length} dates (${firstDate} to ${lastDate})`);
+              console.log(`    Looking for date: ${dateStr}, Found price: ${price !== null ? `$${price.toFixed(2)}` : 'NULL (using avg cost)'}`);
+            } else {
+              console.log(`  ${ticker}: ${pos.shares} shares × $${usedPrice.toFixed(2)} = $${positionValue.toLocaleString()} (NO HISTORICAL DATA - using avg cost)`);
+            }
+          }
+        });
+      }
 
-      const cashWithInterest = runningCash + currentInterestEarned;
+      // For today, use the same cash calculation as Portfolio.js
+      let cashWithInterest;
+      if (isToday && portfolio) {
+        // Match Portfolio.js logic: use portfolio.current_cash if available
+        const baseCash = (portfolio.current_cash !== null && portfolio.current_cash !== undefined && !Number.isNaN(portfolio.current_cash))
+          ? portfolio.current_cash
+          : runningCash;
+        cashWithInterest = baseCash + currentInterestEarned;
+      } else {
+        cashWithInterest = runningCash + currentInterestEarned;
+      }
 
       const totalValue = positionsValue + cashWithInterest;
 
-      dataPoints.push({
+      // Store data point with all calculated values
+      // positionsValue = sum of (shares * closing price) for all positions on this date
+      const dataPoint = {
         date: dateStr,
         totalValue: totalValue,
-        positionsValue: positionsValue,
-        cash: runningCash,
+        positionsValue: positionsValue, // This is the key value: shares * closing price for each position
+        cash: isToday && portfolio?.current_cash !== null && portfolio?.current_cash !== undefined ? portfolio.current_cash : runningCash,
         cashWithInterest: cashWithInterest,
         interestEarned: currentInterestEarned
-      });
+      };
+      
+      dataPoints.push(dataPoint);
 
       // Move to next day (or week/month for longer periods)
       if (selectedPeriod === '5Y') {
@@ -249,13 +426,52 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
         currentDate.setDate(currentDate.getDate() + 1); // Daily for shorter periods
       }
     }
+    
+    // Ensure we always have today's data point if it's not already included
+    if (dataPoints.length === 0 || dataPoints[dataPoints.length - 1].date !== todayStr) {
+      // Calculate today's value using current positions and prices
+      let todayPositionsValue = 0;
+      positions.forEach((position) => {
+        const currentPrice = currentPrices[position.ticker];
+        if (currentPrice) {
+          todayPositionsValue += position.shares * currentPrice;
+        }
+      });
+      
+      // Calculate today's cash and interest (matching Portfolio.js logic)
+      const baseCash = (portfolio?.current_cash !== null && portfolio?.current_cash !== undefined && !Number.isNaN(portfolio?.current_cash))
+        ? portfolio.current_cash
+        : (portfolio?.starting_cash || 50000000) - positions.reduce((sum, p) => sum + (p.shares * p.average_price), 0);
+      
+      const portfolioStartDate = new Date(portfolio?.created_at || new Date());
+      const daysSinceCreation = Math.floor((new Date() - portfolioStartDate) / (1000 * 60 * 60 * 24));
+      const todayInterestEarned = baseCash * dailyInterestRate * Math.max(0, daysSinceCreation);
+      const todayCashWithInterest = baseCash + todayInterestEarned;
+      const todayTotalValue = todayPositionsValue + todayCashWithInterest;
+      
+      dataPoints.push({
+        date: todayStr,
+        totalValue: todayTotalValue,
+        positionsValue: todayPositionsValue,
+        cash: baseCash,
+        cashWithInterest: todayCashWithInterest,
+        interestEarned: todayInterestEarned
+      });
+    }
 
     return dataPoints;
-  }, [portfolio, transactions, selectedPeriod, currentPrices, historicalPrices]);
+  }, [portfolio, transactions, selectedPeriod, currentPrices, historicalPrices, positions, loading]);
 
+  // Use stored historical values if available, otherwise use calculated values
   useEffect(() => {
-    setHistoricalData(calculatePortfolioHistory);
-  }, [calculatePortfolioHistory]);
+    if (storedHistoricalValues && storedHistoricalValues.length > 0) {
+      // Use pre-calculated values from database
+      setHistoricalData(storedHistoricalValues);
+    } else {
+      // Fallback to calculated values
+      setHistoricalData(calculatePortfolioHistory);
+    }
+  }, [storedHistoricalValues, calculatePortfolioHistory]);
 
   const formatCurrency = (value) => {
     if (value >= 1000000) {
@@ -277,14 +493,29 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
     }
   };
 
-  // Calculate current vs start value
+  // Calculate current value and total gain/loss
   const currentValue = historicalData.length > 0 
     ? historicalData[historicalData.length - 1]?.totalValue || 0
     : 0;
   const startValue = historicalData.length > 0 
     ? historicalData[0]?.totalValue || 0
     : 0;
-  const change = currentValue - startValue;
+  
+  // Calculate total gain/loss (matching Portfolio.js calculateTotalGainLoss)
+  // This is: current positions value - cost basis of positions
+  const calculateTotalGainLoss = () => {
+    if (!positions || positions.length === 0) return 0;
+    return positions.reduce((total, position) => {
+      const currentPrice = currentPrices[position.ticker];
+      if (!currentPrice) return total;
+      const currentValue = position.shares * currentPrice;
+      const costBasis = position.shares * position.average_price;
+      return total + (currentValue - costBasis);
+    }, 0);
+  };
+  
+  const totalGainLoss = calculateTotalGainLoss();
+  const change = currentValue - startValue; // Period change
   const changePercent = startValue > 0 ? ((change / startValue) * 100) : 0;
 
   // Calculate total interest earned
@@ -394,15 +625,15 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
           </p>
         </div>
         <div className="text-center p-3 bg-green-50 rounded-lg">
-          <p className="text-sm text-gray-600">Period Change</p>
-          <p className={`text-xl font-bold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {change >= 0 ? '+' : ''}
+          <p className="text-sm text-gray-600">Total Gain/Loss</p>
+          <p className={`text-xl font-bold ${totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {totalGainLoss >= 0 ? '+' : ''}
             {new Intl.NumberFormat('en-US', {
               style: 'currency',
               currency: 'USD',
               minimumFractionDigits: 0,
               maximumFractionDigits: 0
-            }).format(change)}
+            }).format(totalGainLoss)}
           </p>
         </div>
         <div className="text-center p-3 bg-purple-50 rounded-lg">
@@ -454,10 +685,10 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
               type="monotone"
               dataKey="positionsValue"
               stroke="#10b981"
-              strokeWidth={1.5}
-              strokeDasharray="5 5"
+              strokeWidth={2}
               dot={false}
               name="Positions Value"
+              activeDot={{ r: 4 }}
             />
             <Line
               type="monotone"

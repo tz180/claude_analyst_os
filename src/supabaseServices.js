@@ -1824,6 +1824,41 @@ export const historicalPortfolioValueServices = {
       
       console.log(`📊 Calculated ${valuesToStore.length} daily portfolio values`);
       
+      // First, verify the table exists by trying a simple query
+      console.log('Testing table access for historical_portfolio_values...');
+      const { data: testData, error: testError } = await supabase
+        .from('historical_portfolio_values')
+        .select('id')
+        .limit(1);
+      
+      if (testError) {
+        console.error('Table access test failed:', testError);
+        console.error('Error code:', testError.code);
+        console.error('Error status:', testError.status);
+        console.error('Error message:', testError.message);
+        console.error('Full error object:', JSON.stringify(testError, null, 2));
+        
+        const errorMessage = testError.message || JSON.stringify(testError);
+        if (testError.code === 'PGRST116' || 
+            testError.code === '42P01' || 
+            testError.status === 404 ||
+            errorMessage.includes('404') || 
+            errorMessage.includes('relation') || 
+            errorMessage.includes('does not exist') ||
+            errorMessage.includes('Could not find')) {
+          return { 
+            success: false, 
+            error: `Table "historical_portfolio_values" does not exist or is not accessible (Error: ${testError.code || testError.status || 'unknown'}). Please verify: 1) The SQL migration was run successfully in Supabase SQL Editor, 2) RLS policies are set correctly, 3) You are authenticated. Check the browser console for more details.` 
+          };
+        }
+        return { 
+          success: false, 
+          error: `Cannot access table: ${testError.message || JSON.stringify(testError)} (Code: ${testError.code}, Status: ${testError.status})` 
+        };
+      }
+      
+      console.log('✓ Table access test passed');
+      
       // Store in database in batches
       const batchSize = 100;
       const errors = [];
@@ -1832,10 +1867,32 @@ export const historicalPortfolioValueServices = {
         const batch = valuesToStore.slice(i, i + batchSize);
         const { error } = await supabase
           .from('historical_portfolio_values')
-          .upsert(batch, { onConflict: 'portfolio_id,date' });
+          .upsert(batch, { 
+            onConflict: 'portfolio_id,date',
+            ignoreDuplicates: false 
+          });
         
         if (error) {
           console.error(`Error storing batch ${Math.floor(i / batchSize) + 1}:`, error);
+          console.error('Error details:', JSON.stringify(error, null, 2));
+          console.error('Error code:', error.code);
+          console.error('Error status:', error.status);
+          
+          // Check if it's a 404 or table doesn't exist error
+          const errorMessage = error.message || JSON.stringify(error);
+          if (error.code === 'PGRST116' || 
+              error.code === '42P01' || 
+              error.status === 404 ||
+              errorMessage.includes('404') || 
+              errorMessage.includes('relation') || 
+              errorMessage.includes('does not exist') ||
+              errorMessage.includes('Could not find')) {
+            return { 
+              success: false, 
+              error: 'Table "historical_portfolio_values" does not exist or is not accessible. Please verify the SQL migration was run successfully.' 
+            };
+          }
+          
           errors.push(error);
         }
       }
