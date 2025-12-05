@@ -1723,23 +1723,32 @@ export const historicalPortfolioValueServices = {
       const CASH_INTEREST_RATE = 0.042; // 4.2% annual
       const dailyInterestRate = CASH_INTEREST_RATE / 365;
       
-      let runningCash = parseFloat(portfolio.starting_cash || 50000000);
+      // Cash balance includes accumulated interest (compounding)
+      let cashBalance = parseFloat(portfolio.starting_cash || 50000000);
       const positionHistory = {}; // { ticker: { shares, totalCost } }
       let transactionIndex = 0;
-      let lastCashUpdateDate = new Date(portfolio.created_at || firstTransactionDate);
-      let totalInterestEarned = 0;
+      let totalInterestEarned = 0; // Track cumulative interest for display
+      const portfolioStartDate = new Date(portfolio.created_at || firstTransactionDate);
+      portfolioStartDate.setHours(0, 0, 0, 0);
       
       const valuesToStore = [];
       let currentDate = new Date(startDate);
       const todayStr = today.toISOString().split('T')[0];
       
       console.log(`Calculating values from ${startDate.toISOString().split('T')[0]} to ${todayStr}`);
+      console.log(`Starting cash: $${cashBalance.toLocaleString()}, Daily interest rate: ${(dailyInterestRate * 100).toFixed(6)}%`);
       
       while (currentDate <= endDate) {
         const dateStr = currentDate.toISOString().split('T')[0];
         const isToday = dateStr === todayStr;
         
-        // Process transactions that occurred on or before this date
+        // Calculate daily interest on current cash balance (compounding)
+        // Interest = (1/365) * interest_rate * cash_balance
+        const dailyInterest = cashBalance * dailyInterestRate;
+        cashBalance += dailyInterest; // Add interest to cash balance (compounding)
+        totalInterestEarned += dailyInterest; // Track cumulative interest
+        
+        // Process transactions that occurred on this date
         while (transactionIndex < transactions.length) {
           const tx = transactions[transactionIndex];
           const txDate = new Date(tx.transaction_date);
@@ -1750,40 +1759,30 @@ export const historicalPortfolioValueServices = {
             break; // Transaction is in the future
           }
           
-          // Calculate interest on cash up to this transaction date
-          const daysSinceLastUpdate = Math.floor((txDate - lastCashUpdateDate) / (1000 * 60 * 60 * 24));
-          if (daysSinceLastUpdate > 0) {
-            totalInterestEarned += runningCash * dailyInterestRate * daysSinceLastUpdate;
-          }
-          lastCashUpdateDate = new Date(txDate);
-          
-          // Update position history
-          if (tx.transaction_type === 'buy') {
-            runningCash -= parseFloat(tx.total_amount);
-            if (!positionHistory[tx.ticker]) {
-              positionHistory[tx.ticker] = { shares: 0, totalCost: 0 };
-            }
-            positionHistory[tx.ticker].shares += parseFloat(tx.shares);
-            positionHistory[tx.ticker].totalCost += parseFloat(tx.total_amount);
-          } else if (tx.transaction_type === 'sell') {
-            runningCash += parseFloat(tx.total_amount);
-            if (positionHistory[tx.ticker]) {
-              const avgCost = positionHistory[tx.ticker].totalCost / positionHistory[tx.ticker].shares;
-              positionHistory[tx.ticker].shares -= parseFloat(tx.shares);
-              positionHistory[tx.ticker].totalCost = positionHistory[tx.ticker].shares * avgCost;
-              if (positionHistory[tx.ticker].shares <= 0) {
-                delete positionHistory[tx.ticker];
+          if (txDateStr === dateStr) {
+            // Process transaction on this date (after interest calculation)
+            if (tx.transaction_type === 'buy') {
+              cashBalance -= parseFloat(tx.total_amount);
+              if (!positionHistory[tx.ticker]) {
+                positionHistory[tx.ticker] = { shares: 0, totalCost: 0 };
+              }
+              positionHistory[tx.ticker].shares += parseFloat(tx.shares);
+              positionHistory[tx.ticker].totalCost += parseFloat(tx.total_amount);
+            } else if (tx.transaction_type === 'sell') {
+              cashBalance += parseFloat(tx.total_amount);
+              if (positionHistory[tx.ticker]) {
+                const avgCost = positionHistory[tx.ticker].totalCost / positionHistory[tx.ticker].shares;
+                positionHistory[tx.ticker].shares -= parseFloat(tx.shares);
+                positionHistory[tx.ticker].totalCost = positionHistory[tx.ticker].shares * avgCost;
+                if (positionHistory[tx.ticker].shares <= 0) {
+                  delete positionHistory[tx.ticker];
+                }
               }
             }
           }
           
           transactionIndex++;
         }
-        
-        // Calculate interest from last update to current date
-        const daysSinceLastUpdate = Math.floor((currentDate - lastCashUpdateDate) / (1000 * 60 * 60 * 24));
-        const interestSinceLastUpdate = runningCash * dailyInterestRate * Math.max(0, daysSinceLastUpdate);
-        const currentInterestEarned = totalInterestEarned + interestSinceLastUpdate;
         
         // Calculate positions value for this date
         let positionsValue = 0;
@@ -1800,22 +1799,25 @@ export const historicalPortfolioValueServices = {
           }
         });
         
-        // For today, use portfolio.current_cash if available
-        let cashForDate = runningCash;
+        // For today, use portfolio.current_cash if available (but it should already include interest)
+        let cashForDate = cashBalance;
         if (isToday && portfolio.current_cash !== null && portfolio.current_cash !== undefined && !Number.isNaN(portfolio.current_cash)) {
+          // If current_cash is provided, use it but we still need to track interest
+          // The current_cash might not include today's interest yet, so we'll use our calculated value
+          // Or we can use current_cash if it's more accurate
           cashForDate = parseFloat(portfolio.current_cash);
         }
         
-        const cashWithInterest = cashForDate + currentInterestEarned;
-        const totalValue = positionsValue + cashWithInterest;
+        // Total value = cash (which includes accumulated interest) + positions value
+        const totalValue = cashForDate + positionsValue;
         
         valuesToStore.push({
           portfolio_id: portfolioId,
           date: dateStr,
-          cash: cashForDate,
+          cash: cashForDate, // Cash balance includes accumulated interest
           positions_value: positionsValue,
           total_value: totalValue,
-          interest_earned: currentInterestEarned
+          interest_earned: totalInterestEarned // Cumulative interest earned
         });
         
         // Move to next day
