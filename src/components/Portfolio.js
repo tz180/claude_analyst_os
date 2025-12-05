@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Plus, BarChart3 } from 'lucide-react';
-import { portfolioServices } from '../supabaseServices';
+import { DollarSign, TrendingUp, Plus, BarChart3, RefreshCw } from 'lucide-react';
+import { portfolioServices, historicalPortfolioValueServices } from '../supabaseServices';
 import { stockServices } from '../stockServices';
 import PortfolioAnalytics from './PortfolioAnalytics';
 import PortfolioValueChart from './PortfolioValueChart';
@@ -18,6 +18,8 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [priceLoading, setPriceLoading] = useState(false);
   const [pricesLoading, setPricesLoading] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [calculatingHistorical, setCalculatingHistorical] = useState(false);
+  const [historicalCalculationStatus, setHistoricalCalculationStatus] = useState(null);
 
   // Load current prices for all positions
   useEffect(() => {
@@ -600,12 +602,73 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
       </div>
 
       {/* Portfolio Value Chart */}
-      <PortfolioValueChart
-        portfolio={portfolio}
-        positions={positions}
-        transactions={transactions}
-        currentPrices={currentPrices}
-      />
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={async () => {
+                if (!portfolio?.id) return;
+                setCalculatingHistorical(true);
+                setHistoricalCalculationStatus(null);
+                try {
+                  const result = await historicalPortfolioValueServices.calculateAndStoreHistoricalValues(portfolio.id);
+                  if (result.success) {
+                    setHistoricalCalculationStatus({
+                      type: 'success',
+                      message: `Successfully calculated ${result.recordsStored} daily portfolio values!`
+                    });
+                    // Refresh the page data after a short delay
+                    setTimeout(() => {
+                      if (onRefresh) onRefresh();
+                    }, 1000);
+                  } else {
+                    setHistoricalCalculationStatus({
+                      type: 'error',
+                      message: `Error: ${result.error}`
+                    });
+                  }
+                } catch (error) {
+                  setHistoricalCalculationStatus({
+                    type: 'error',
+                    message: `Error: ${error.message}`
+                  });
+                } finally {
+                  setCalculatingHistorical(false);
+                }
+              }}
+              disabled={calculatingHistorical || !portfolio?.id}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {calculatingHistorical ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Calculating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={16} className="mr-2" />
+                  Calculate Historical Values
+                </>
+              )}
+            </button>
+            {historicalCalculationStatus && (
+              <div className={`text-sm px-3 py-1 rounded ${
+                historicalCalculationStatus.type === 'success' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {historicalCalculationStatus.message}
+              </div>
+            )}
+          </div>
+        </div>
+        <PortfolioValueChart
+          portfolio={portfolio}
+          positions={positions}
+          transactions={transactions}
+          currentPrices={currentPrices}
+        />
+      </div>
 
       {/* Portfolio Analytics */}
       <PortfolioAnalytics 

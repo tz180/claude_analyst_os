@@ -774,6 +774,20 @@ export const portfolioServices = {
       }
 
       console.log('=== buyShares FUNCTION SUCCESS ===');
+      
+      // Trigger historical portfolio value recalculation (async, non-blocking)
+      historicalPortfolioValueServices.calculateAndStoreHistoricalValues(portfolioId)
+        .then(result => {
+          if (result.success) {
+            console.log('✅ Historical portfolio values updated after buy transaction');
+          } else {
+            console.warn('⚠ Failed to update historical portfolio values:', result.error);
+          }
+        })
+        .catch(err => {
+          console.error('Error updating historical portfolio values:', err);
+        });
+      
       return { success: true, data: transaction && transaction.length > 0 ? transaction[0] : null };
     } catch (error) {
       console.error('=== buyShares FUNCTION ERROR ===');
@@ -858,6 +872,20 @@ export const portfolioServices = {
       }
 
       console.log('Sell transaction completed successfully');
+      
+      // Trigger historical portfolio value recalculation (async, non-blocking)
+      historicalPortfolioValueServices.calculateAndStoreHistoricalValues(portfolioId)
+        .then(result => {
+          if (result.success) {
+            console.log('✅ Historical portfolio values updated after sell transaction');
+          } else {
+            console.warn('⚠ Failed to update historical portfolio values:', result.error);
+          }
+        })
+        .catch(err => {
+          console.error('Error updating historical portfolio values:', err);
+        });
+      
       return { success: true, data: transaction && transaction.length > 0 ? transaction[0] : null };
     } catch (error) {
       console.error('Error selling shares:', error);
@@ -1592,6 +1620,275 @@ export const historicalPriceServices = {
     } catch (error) {
       console.error(`Error getting date range for ${ticker}:`, error);
       return { success: false, earliestDate: null, latestDate: null };
+    }
+  }
+};
+
+// Historical Portfolio Values Services
+export const historicalPortfolioValueServices = {
+  // Calculate and store historical portfolio values for a portfolio
+  // This processes all transactions and calculates daily portfolio values
+  async calculateAndStoreHistoricalValues(portfolioId) {
+    try {
+      console.log(`📊 Starting historical portfolio value calculation for portfolio ${portfolioId}`);
+      
+      // Get portfolio info
+      const { data: portfolio, error: portfolioError } = await supabase
+        .from('portfolios')
+        .select('*')
+        .eq('id', portfolioId)
+        .single();
+      
+      if (portfolioError || !portfolio) {
+        console.error('Error fetching portfolio:', portfolioError);
+        return { success: false, error: 'Portfolio not found' };
+      }
+
+      // Get all transactions for this portfolio
+      const { data: transactions, error: transactionsError } = await supabase
+        .from('portfolio_transactions')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .order('transaction_date', { ascending: true });
+      
+      if (transactionsError) {
+        console.error('Error fetching transactions:', transactionsError);
+        return { success: false, error: transactionsError.message };
+      }
+
+      if (!transactions || transactions.length === 0) {
+        console.log('No transactions found for portfolio');
+        return { success: true, message: 'No transactions to process' };
+      }
+
+      // Get unique tickers from transactions
+      const tickers = [...new Set(transactions.map(tx => tx.ticker.toUpperCase()))];
+      console.log(`Found ${tickers.length} unique tickers:`, tickers);
+
+      // Get date range
+      const firstTransactionDate = new Date(transactions[0].transaction_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Calculate date range we need for historical prices
+      const startDate = new Date(firstTransactionDate);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(today);
+      
+      // Fetch historical prices for all tickers
+      const historicalPrices = {};
+      for (const ticker of tickers) {
+        const startDateStr = startDate.toISOString().split('T')[0];
+        const endDateStr = endDate.toISOString().split('T')[0];
+        
+        const result = await historicalPriceServices.getHistoricalPrices(ticker, startDateStr, endDateStr);
+        if (result.success && result.data && result.data.length > 0) {
+          // Create a map: date -> price
+          const priceMap = {};
+          result.data.forEach(({ date, price }) => {
+            priceMap[date] = price;
+          });
+          historicalPrices[ticker] = priceMap;
+          console.log(`✓ Loaded ${result.data.length} historical prices for ${ticker}`);
+        } else {
+          console.warn(`⚠ No historical prices found for ${ticker}`);
+          historicalPrices[ticker] = {};
+        }
+      }
+
+      // Helper function to get price for a date (handles weekends/holidays)
+      const getPriceForDate = (ticker, dateStr) => {
+        const prices = historicalPrices[ticker];
+        if (!prices || Object.keys(prices).length === 0) {
+          return null;
+        }
+        
+        // Try exact match first
+        if (prices[dateStr]) {
+          return prices[dateStr];
+        }
+        
+        // Find most recent trading day before or on this date
+        const dates = Object.keys(prices).sort().reverse();
+        for (const date of dates) {
+          if (date <= dateStr) {
+            return prices[date];
+          }
+        }
+        
+        return null;
+      };
+
+      // Process transactions and calculate daily values
+      const CASH_INTEREST_RATE = 0.042; // 4.2% annual
+      const dailyInterestRate = CASH_INTEREST_RATE / 365;
+      
+      let runningCash = parseFloat(portfolio.starting_cash || 50000000);
+      const positionHistory = {}; // { ticker: { shares, totalCost } }
+      let transactionIndex = 0;
+      let lastCashUpdateDate = new Date(portfolio.created_at || firstTransactionDate);
+      let totalInterestEarned = 0;
+      
+      const valuesToStore = [];
+      let currentDate = new Date(startDate);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      console.log(`Calculating values from ${startDate.toISOString().split('T')[0]} to ${todayStr}`);
+      
+      while (currentDate <= endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const isToday = dateStr === todayStr;
+        
+        // Process transactions that occurred on or before this date
+        while (transactionIndex < transactions.length) {
+          const tx = transactions[transactionIndex];
+          const txDate = new Date(tx.transaction_date);
+          txDate.setHours(0, 0, 0, 0);
+          const txDateStr = txDate.toISOString().split('T')[0];
+          
+          if (txDateStr > dateStr) {
+            break; // Transaction is in the future
+          }
+          
+          // Calculate interest on cash up to this transaction date
+          const daysSinceLastUpdate = Math.floor((txDate - lastCashUpdateDate) / (1000 * 60 * 60 * 24));
+          if (daysSinceLastUpdate > 0) {
+            totalInterestEarned += runningCash * dailyInterestRate * daysSinceLastUpdate;
+          }
+          lastCashUpdateDate = new Date(txDate);
+          
+          // Update position history
+          if (tx.transaction_type === 'buy') {
+            runningCash -= parseFloat(tx.total_amount);
+            if (!positionHistory[tx.ticker]) {
+              positionHistory[tx.ticker] = { shares: 0, totalCost: 0 };
+            }
+            positionHistory[tx.ticker].shares += parseFloat(tx.shares);
+            positionHistory[tx.ticker].totalCost += parseFloat(tx.total_amount);
+          } else if (tx.transaction_type === 'sell') {
+            runningCash += parseFloat(tx.total_amount);
+            if (positionHistory[tx.ticker]) {
+              const avgCost = positionHistory[tx.ticker].totalCost / positionHistory[tx.ticker].shares;
+              positionHistory[tx.ticker].shares -= parseFloat(tx.shares);
+              positionHistory[tx.ticker].totalCost = positionHistory[tx.ticker].shares * avgCost;
+              if (positionHistory[tx.ticker].shares <= 0) {
+                delete positionHistory[tx.ticker];
+              }
+            }
+          }
+          
+          transactionIndex++;
+        }
+        
+        // Calculate interest from last update to current date
+        const daysSinceLastUpdate = Math.floor((currentDate - lastCashUpdateDate) / (1000 * 60 * 60 * 24));
+        const interestSinceLastUpdate = runningCash * dailyInterestRate * Math.max(0, daysSinceLastUpdate);
+        const currentInterestEarned = totalInterestEarned + interestSinceLastUpdate;
+        
+        // Calculate positions value for this date
+        let positionsValue = 0;
+        Object.entries(positionHistory).forEach(([ticker, pos]) => {
+          if (pos.shares > 0) {
+            const price = getPriceForDate(ticker, dateStr);
+            if (price !== null && price > 0) {
+              positionsValue += pos.shares * price;
+            } else {
+              // Fallback to average cost if no historical price
+              const avgCost = pos.totalCost / pos.shares;
+              positionsValue += pos.shares * avgCost;
+            }
+          }
+        });
+        
+        // For today, use portfolio.current_cash if available
+        let cashForDate = runningCash;
+        if (isToday && portfolio.current_cash !== null && portfolio.current_cash !== undefined && !Number.isNaN(portfolio.current_cash)) {
+          cashForDate = parseFloat(portfolio.current_cash);
+        }
+        
+        const cashWithInterest = cashForDate + currentInterestEarned;
+        const totalValue = positionsValue + cashWithInterest;
+        
+        valuesToStore.push({
+          portfolio_id: portfolioId,
+          date: dateStr,
+          cash: cashForDate,
+          positions_value: positionsValue,
+          total_value: totalValue,
+          interest_earned: currentInterestEarned
+        });
+        
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      console.log(`📊 Calculated ${valuesToStore.length} daily portfolio values`);
+      
+      // Store in database in batches
+      const batchSize = 100;
+      const errors = [];
+      
+      for (let i = 0; i < valuesToStore.length; i += batchSize) {
+        const batch = valuesToStore.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from('historical_portfolio_values')
+          .upsert(batch, { onConflict: 'portfolio_id,date' });
+        
+        if (error) {
+          console.error(`Error storing batch ${Math.floor(i / batchSize) + 1}:`, error);
+          errors.push(error);
+        }
+      }
+      
+      if (errors.length > 0) {
+        return { success: false, error: errors[0].message };
+      }
+      
+      console.log(`✅ Successfully stored ${valuesToStore.length} historical portfolio values`);
+      return { success: true, recordsStored: valuesToStore.length };
+      
+    } catch (error) {
+      console.error('Error calculating historical portfolio values:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get historical portfolio values for a date range
+  async getHistoricalValues(portfolioId, startDate = null, endDate = null) {
+    try {
+      let query = supabase
+        .from('historical_portfolio_values')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .order('date', { ascending: true });
+
+      if (startDate) {
+        query = query.gte('date', startDate);
+      }
+      if (endDate) {
+        query = query.lte('date', endDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error fetching historical portfolio values:', error);
+        return { success: false, error: error.message, data: [] };
+      }
+
+      return {
+        success: true,
+        data: (data || []).map(row => ({
+          date: row.date,
+          cash: parseFloat(row.cash),
+          positionsValue: parseFloat(row.positions_value),
+          totalValue: parseFloat(row.total_value),
+          interestEarned: parseFloat(row.interest_earned)
+        }))
+      };
+    } catch (error) {
+      console.error('Error in getHistoricalValues:', error);
+      return { success: false, error: error.message, data: [] };
     }
   }
 };

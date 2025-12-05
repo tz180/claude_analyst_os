@@ -23,6 +23,11 @@ CREATE INDEX IF NOT EXISTS idx_historical_stock_prices_ticker_date ON historical
 -- Enable Row Level Security (allow all reads, but restrict writes if needed)
 ALTER TABLE historical_stock_prices ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "Anyone can view historical stock prices" ON historical_stock_prices;
+DROP POLICY IF EXISTS "Anyone can insert historical stock prices" ON historical_stock_prices;
+DROP POLICY IF EXISTS "Anyone can update historical stock prices" ON historical_stock_prices;
+
 -- Allow all authenticated users to read historical prices (they're public data)
 CREATE POLICY "Anyone can view historical stock prices" ON historical_stock_prices
   FOR SELECT USING (true);
@@ -42,6 +47,9 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
+
+-- Drop trigger if it exists (for idempotency)
+DROP TRIGGER IF EXISTS update_historical_stock_prices_updated_at ON historical_stock_prices;
 
 CREATE TRIGGER update_historical_stock_prices_updated_at 
   BEFORE UPDATE ON historical_stock_prices 
