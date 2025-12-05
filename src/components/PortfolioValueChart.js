@@ -493,10 +493,42 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
     }
   };
 
-  // Calculate current value and total gain/loss
-  const currentValue = historicalData.length > 0 
-    ? historicalData[historicalData.length - 1]?.totalValue || 0
-    : 0;
+  // Calculate current value to match Portfolio.js calculation
+  // This ensures the chart's current value matches the portfolio summary
+  const calculateCurrentValue = () => {
+    // Calculate positions value using current prices
+    const positionsValue = positions.reduce((total, position) => {
+      const currentPrice = currentPrices[position.ticker];
+      if (!currentPrice) return total;
+      return total + (position.shares * currentPrice);
+    }, 0);
+    
+    // Calculate cash with interest (matching Portfolio.js logic)
+    const CASH_INTEREST_RATE = 0.042; // 4.2% annual
+    const getPortfolioCash = () => {
+      if (portfolio && typeof portfolio.current_cash === 'number' && !Number.isNaN(portfolio.current_cash)) {
+        return portfolio.current_cash;
+      }
+      const startingCash = portfolio?.starting_cash || 50000000;
+      const totalInvested = positions.reduce((sum, p) => sum + (p.shares * p.average_price), 0);
+      return startingCash - totalInvested;
+    };
+    
+    const calculateInterestEarned = () => {
+      const baseCash = getPortfolioCash();
+      if (!portfolio || !portfolio.created_at) return 0;
+      const daysSinceCreation = Math.floor(
+        (new Date() - new Date(portfolio.created_at)) / (1000 * 60 * 60 * 24)
+      );
+      const dailyInterestRate = CASH_INTEREST_RATE / 365;
+      return baseCash * dailyInterestRate * daysSinceCreation;
+    };
+    
+    const cashWithInterest = getPortfolioCash() + calculateInterestEarned();
+    return positionsValue + cashWithInterest;
+  };
+  
+  const currentValue = calculateCurrentValue();
   const startValue = historicalData.length > 0 
     ? historicalData[0]?.totalValue || 0
     : 0;
@@ -537,14 +569,10 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
             <span className="text-gray-600">Positions: </span>
             <span className="font-semibold">{formatCurrency(data.positionsValue)}</span>
           </p>
-          <p className="text-sm">
-            <span className="text-gray-600">Cash: </span>
-            <span className="font-semibold">{formatCurrency(data.cash)}</span>
-          </p>
-          <p className="text-sm">
-            <span className="text-gray-600">Interest Earned: </span>
-            <span className="font-semibold text-green-600">{formatCurrency(data.interestEarned)}</span>
-          </p>
+              <p className="text-sm">
+                <span className="text-gray-600">Cash: </span>
+                <span className="font-semibold">{formatCurrency(data.cash)}</span>
+              </p>
         </div>
       );
     }
@@ -689,15 +717,6 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
               dot={false}
               name="Positions Value"
               activeDot={{ r: 4 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="cashWithInterest"
-              stroke="#f59e0b"
-              strokeWidth={1.5}
-              strokeDasharray="3 3"
-              dot={false}
-              name="Cash + Interest"
             />
           </LineChart>
         </ResponsiveContainer>
