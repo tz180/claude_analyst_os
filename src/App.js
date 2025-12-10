@@ -2037,7 +2037,6 @@ const AnalystOS = () => {
               freshest,
               freshnessSource,
               freshnessDate
-              freshest
             };
           })
           .sort((a, b) => b.count - a.count)
