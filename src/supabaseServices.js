@@ -1226,6 +1226,25 @@ export const stockNotesServices = {
     return data || [];
   },
 
+  // Get most recent notes across all tickers
+  async getRecentNotes(limit = 5) {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('stock_notes')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching recent notes:', error);
+      return [];
+    }
+    return data || [];
+  },
+
   // Add a new note
   async addNote(noteData) {
     console.log('stockNotesServices.addNote called with:', noteData);

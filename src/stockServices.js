@@ -306,6 +306,22 @@ export const stockServices = {
         return { success: false, error: 'No company data found for this symbol' };
       }
       
+      const marketCap = parseNullableNumber(data.MarketCapitalization);
+      const totalDebt = parseNullableNumber(data.TotalDebt);
+      const cashAndEquivalents = parseNullableNumber(data.CashAndCashEquivalents);
+      let enterpriseValue = parseNullableNumber(data.EnterpriseValue);
+
+      if (
+        (enterpriseValue === null || enterpriseValue === marketCap) &&
+        (totalDebt !== null || cashAndEquivalents !== null)
+      ) {
+        enterpriseValue = (marketCap ?? 0) + (totalDebt ?? 0) - (cashAndEquivalents ?? 0);
+      }
+
+      if (enterpriseValue === null) {
+        enterpriseValue = marketCap ?? null;
+      }
+
       return {
         success: true,
         data: {
@@ -317,8 +333,8 @@ export const stockServices = {
           country: data.Country,
           sector: data.Sector,
           industry: data.Industry,
-          marketCap: parseNullableNumber(data.MarketCapitalization),
-          enterpriseValue: parseNullableNumber(data.EnterpriseValue) ?? parseNullableNumber(data.MarketCapitalization), // Use EV if available, otherwise use market cap
+          marketCap,
+          enterpriseValue,
           peRatio: parseNullableNumber(data.PERatio),
           priceToBook: parseNullableNumber(data.PriceToBookRatio),
           dividendYield: parseNullableNumber(data.DividendYield),
@@ -337,8 +353,8 @@ export const stockServices = {
           ebitda: parseNullableNumber(data.EBITDA),
           ebit: parseNullableNumber(data.EBIT),
           netIncome: parseNullableNumber(data.NetIncomeTTM),
-          totalDebt: parseNullableNumber(data.TotalDebt),
-          cashAndEquivalents: parseNullableNumber(data.CashAndCashEquivalents)
+          totalDebt,
+          cashAndEquivalents
         }
       };
     } catch (error) {

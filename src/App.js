@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, ArrowRight, CalendarDays, Compass, Layers, Sparkles } from 'lucide-react';
+import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, ArrowRight, Compass, MessageSquare } from 'lucide-react';
 import './App.css';
 import { supabase } from './supabase';
 import { 
@@ -8,7 +8,8 @@ import {
   deliverablesServices, 
   pipelineServices, 
   analyticsServices,
-  portfolioServices
+  portfolioServices,
+  stockNotesServices
 } from './supabaseServices';
 import { stockServices } from './stockServices';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -53,6 +54,9 @@ const AnalystOS = () => {
   const [analytics, setAnalytics] = useState(null);
   const [stockSearchTicker, setStockSearchTicker] = useState('');
   const [goalsHistory, setGoalsHistory] = useState([]);
+  const [recentNotes, setRecentNotes] = useState([]);
+  const [recentNotesLoading, setRecentNotesLoading] = useState(false);
+  const [recentNotesError, setRecentNotesError] = useState(null);
 
   // Pipeline states
   const [newIdeaCompany, setNewIdeaCompany] = useState('');
@@ -294,12 +298,81 @@ const AnalystOS = () => {
     }
   };
 
+  const loadRecentNotes = useCallback(async () => {
+    try {
+      setRecentNotesLoading(true);
+      setRecentNotesError(null);
+      const notesData = await stockNotesServices.getRecentNotes(5);
+
+      if (!Array.isArray(notesData) || notesData.length === 0) {
+        setRecentNotes([]);
+        return;
+      }
+
+      const tickers = [...new Set(notesData.map((note) => note.ticker).filter(Boolean))];
+      const quoteResponses = await Promise.all(
+        tickers.map(async (symbol) => {
+          const quote = await stockServices.getStockQuote(symbol);
+          return { symbol: symbol.toUpperCase(), quote };
+        })
+      );
+
+      const priceMap = quoteResponses.reduce((acc, { symbol, quote }) => {
+        if (quote?.success && quote.data?.price !== undefined && quote.data?.price !== null) {
+          acc[symbol] = quote.data.price;
+        }
+        return acc;
+      }, {});
+
+      const enrichedNotes = notesData.map((note) => {
+        const symbol = note.ticker ? note.ticker.toUpperCase() : 'N/A';
+        const entryPrice =
+          typeof note.price_when_written === 'number'
+            ? note.price_when_written
+            : parseFloat(note.price_when_written);
+        const normalizedEntryPrice =
+          entryPrice !== undefined && !Number.isNaN(entryPrice) ? entryPrice : null;
+        const currentPrice = symbol && priceMap[symbol] !== undefined ? priceMap[symbol] : null;
+
+        let absReturn = null;
+        let pctReturn = null;
+        if (currentPrice !== null && normalizedEntryPrice !== null && normalizedEntryPrice !== 0) {
+          absReturn = currentPrice - normalizedEntryPrice;
+          pctReturn = (absReturn / normalizedEntryPrice) * 100;
+        }
+
+        return {
+          ...note,
+          symbol,
+          entryPrice: normalizedEntryPrice,
+          currentPrice,
+          absReturn,
+          pctReturn
+        };
+      });
+
+      setRecentNotes(enrichedNotes);
+    } catch (error) {
+      console.error('Error loading recent notes:', error);
+      setRecentNotesError(error.message || 'Unable to load research notes');
+      setRecentNotes([]);
+    } finally {
+      setRecentNotesLoading(false);
+    }
+  }, []);
+
   // Load data from Supabase on component mount
   useEffect(() => {
     if (user) {
       loadDataFromSupabase();
     }
   }, [user, loadDataFromSupabase]);
+
+  useEffect(() => {
+    if (currentView === 'stock-crm') {
+      loadRecentNotes();
+    }
+  }, [currentView, loadRecentNotes]);
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -641,6 +714,16 @@ const AnalystOS = () => {
       case 'Stalled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const formatCurrencyValue = (value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(value);
   };
 
   // ✅ Simple Navigation - no text inputs so can stay internal
@@ -1992,9 +2075,6 @@ const AnalystOS = () => {
         const uniqueSectors = Array.from(
           new Set(coverage.map((company) => company.sector).filter(Boolean))
         );
-        const freshModels = coverage.filter(
-          (company) => company.lastModelDate && getDaysAgo(company.lastModelDate) <= 30
-        ).length;
         const memosDue = coverage.filter(
           (company) => !company.lastMemoDate || getDaysAgo(company.lastMemoDate) > 45
         ).length;
@@ -2022,21 +2102,31 @@ const AnalystOS = () => {
               .filter((company) => company.ticker)
               .slice(0, 3)
               .map((company) => company.ticker.toUpperCase());
-            const freshest = [...companies].sort(
-              (a, b) =>
-                getDaysAgo(a.lastMemoDate || a.lastModelDate) -
-                getDaysAgo(b.lastMemoDate || b.lastModelDate)
-            )[0];
-            const freshnessSource = freshest?.lastMemoDate ? 'Memo' : 'Model';
-            const freshnessDate = freshest?.lastMemoDate || freshest?.lastModelDate;
+            const freshest =
+              companies.length > 0
+                ? [...companies].sort(
+                    (a, b) =>
+                      getDaysAgo(a.lastMemoDate || a.lastModelDate) -
+                      getDaysAgo(b.lastMemoDate || b.lastModelDate)
+                  )[0]
+                : null;
+            const freshnessSource = freshest
+              ? freshest.lastMemoDate
+                ? 'Memo'
+                : freshest.lastModelDate
+                ? 'Model'
+                : null
+              : null;
+            const freshnessDate = freshest
+              ? freshest.lastMemoDate || freshest.lastModelDate || null
+              : null;
             return {
               sectorName,
               count: companies.length,
               highlightTickers,
               overdue,
-              freshest,
               freshnessSource,
-              freshnessDate
+              freshnessDate,
               freshest
             };
           })
@@ -2050,101 +2140,87 @@ const AnalystOS = () => {
           if (days === 1) return '1 day ago';
           return `${days} days ago`;
         };
+        const getNotePreview = (content) => {
+          if (!content) return 'No note content captured yet.';
+          return content.length > 140 ? `${content.slice(0, 140)}…` : content;
+        };
 
         return (
           <div className="space-y-6">
-            <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-800 p-8 text-white shadow-lg">
-              <div className="grid gap-8 lg:grid-cols-2">
-                <div className="space-y-6">
-                  <div className="inline-flex items-center space-x-2 text-sm uppercase tracking-wider text-white/80">
-                    <Sparkles size={16} />
-                    <span>Stock CRM workspace</span>
+            <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+              <div className="rounded-2xl border bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-medium text-blue-600">Stock CRM workspace</p>
+                  <h2 className="text-2xl font-semibold text-gray-900">Bring coverage-ready research to life</h2>
+                  <p className="text-sm text-gray-600">
+                    Keep your most important names organized and ready. {memosDue}{' '}
+                    {memosDue === 1 ? 'name needs' : 'names need'} a memo refresh before the next catalyst.
+                  </p>
+                </div>
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Coverage names</p>
+                    <p className="mt-2 text-3xl font-semibold text-gray-900">{coverageCount}</p>
                   </div>
-                  <div>
-                    <h2 className="text-3xl font-semibold leading-snug sm:text-4xl">
-                      Bring coverage-ready research to life
-                    </h2>
-                    <p className="mt-4 text-base text-white/80">
-                      Keep your most important names organized, research-ready, and a click away.
-                      You have {memosDue} {memosDue === 1 ? 'name' : 'names'} due for memo refresh—dive
-                      back in before the next catalyst.
-                    </p>
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Sectors</p>
+                    <p className="mt-2 text-3xl font-semibold text-gray-900">{uniqueSectors.length}</p>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-xl border border-white/10 bg-white/10 p-4">
-                      <div className="flex items-center space-x-2 text-sm text-white/80">
-                        <Layers size={16} />
-                        <span>Names in coverage</span>
-                      </div>
-                      <div className="mt-2 text-3xl font-semibold">{coverageCount}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/10 p-4">
-                      <div className="flex items-center space-x-2 text-sm text-white/80">
-                        <Compass size={16} />
-                        <span>Sectors</span>
-                      </div>
-                      <div className="mt-2 text-3xl font-semibold">{uniqueSectors.length}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/10 p-4">
-                      <div className="flex items-center space-x-2 text-sm text-white/80">
-                        <CalendarDays size={16} />
-                        <span>Fresh models</span>
-                      </div>
-                      <div className="mt-2 text-3xl font-semibold">{freshModels}</div>
-                    </div>
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Memos due</p>
+                    <p className="mt-2 text-3xl font-semibold text-gray-900">{memosDue}</p>
                   </div>
                 </div>
-                <div className="rounded-2xl border border-white/20 bg-white/15 p-6 backdrop-blur">
-                  <p className="text-sm uppercase tracking-wide text-white/70">Jump to a workspace</p>
-                  <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-                    <input
-                      type="text"
-                      placeholder="Enter ticker (e.g., AAPL)"
-                      value={stockSearchTicker}
-                      onChange={(e) => setStockSearchTicker(e.target.value.toUpperCase())}
-                      className="flex-1 rounded-xl border border-white/30 bg-white/90 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleStockSearch();
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={handleStockSearch}
-                      className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-900 shadow-lg shadow-slate-900/10 hover:bg-slate-50"
-                    >
-                      Launch
-                    </button>
-                  </div>
-                  {quickPicks.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-xs uppercase tracking-wide text-white/70">In coverage</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {quickPicks.map((company) => (
-                          <button
-                            key={company.id}
-                            onClick={() => setCurrentView(`stock-crm-${company.ticker.toUpperCase()}`)}
-                            className="rounded-full border border-white/20 bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
-                          >
-                            {company.ticker.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <button
-                    onClick={async () => {
-                      const { stockServices } = await import('./stockServices');
-                      const status = await stockServices.checkAPIStatus();
-                      console.log('API Status:', status);
-                      alert(status.success ? 'API is working!' : `API Error: ${status.error}`);
+              </div>
+              <div className="rounded-2xl border bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-gray-900">Jump into a workspace</p>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="text"
+                    placeholder="Enter ticker (e.g., AAPL)"
+                    value={stockSearchTicker}
+                    onChange={(e) => setStockSearchTicker(e.target.value.toUpperCase())}
+                    className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleStockSearch();
+                      }
                     }}
-                    className="mt-6 inline-flex items-center text-sm font-medium text-white/80 transition hover:text-white"
+                  />
+                  <button
+                    onClick={handleStockSearch}
+                    className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
                   >
-                    Test API Status
-                    <ArrowRight size={16} className="ml-2" />
+                    Launch
                   </button>
                 </div>
+                {quickPicks.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">In coverage</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {quickPicks.map((company) => (
+                        <button
+                          key={company.id}
+                          onClick={() => setCurrentView(`stock-crm-${company.ticker.toUpperCase()}`)}
+                          className="rounded-full border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          {company.ticker.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={async () => {
+                    const status = await stockServices.checkAPIStatus();
+                    console.log('API Status:', status);
+                    alert(status.success ? 'API is working!' : `API Error: ${status.error}`);
+                  }}
+                  className="mt-6 inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900"
+                >
+                  Test API Status
+                  <ArrowRight size={16} className="ml-2" />
+                </button>
               </div>
             </div>
 
@@ -2157,7 +2233,7 @@ const AnalystOS = () => {
                   </div>
                   <h3 className="mt-1 text-xl font-semibold text-gray-900">Names in coverage</h3>
                   <p className="text-sm text-gray-600">
-                    Track research freshness and jump straight into company workspaces. {memosDue} {memosDue === 1 ? 'name' : 'names'} are waiting on memo updates.
+                    Quickly filter into a company profile. View freshness metrics and head straight to your coverage records.
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -2192,48 +2268,18 @@ const AnalystOS = () => {
                           <p className="text-sm text-gray-500">{company.ticker || 'Ticker TBD'}</p>
                         </div>
                         <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
-                          CRM ready
+                          In coverage
                         </span>
                       </div>
-                      <div className="mt-4 space-y-2 text-sm text-gray-600">
-                        <div className="flex items-center justify-between">
-                          <span>Last model</span>
-                          <span className="font-medium text-gray-900">
-                            {formatDaysAgoLabel(company.lastModelDate)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Last memo</span>
-                          <span className="font-medium text-gray-900">
-                            {formatDaysAgoLabel(company.lastMemoDate)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex gap-2">
-                        <button
-                          onClick={() =>
-                            company.ticker &&
-                            setCurrentView(`stock-crm-${company.ticker.toUpperCase()}`)
-                          }
-                          disabled={!company.ticker}
-                          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium text-white transition ${
-                            company.ticker
-                              ? 'bg-blue-600 hover:bg-blue-700'
-                              : 'cursor-not-allowed bg-gray-300'
-                          }`}
-                        >
-                          Open CRM
-                        </button>
-                        <button
-                          onClick={() => {
-                            setCoverageSearch(company.company);
-                            setCurrentView('coverage');
-                          }}
-                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                        >
-                          View Profile
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => {
+                          setCoverageSearch(company.company);
+                          setCurrentView('coverage');
+                        }}
+                        className="mt-4 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        View Profile
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -2270,8 +2316,7 @@ const AnalystOS = () => {
                   </div>
                   <h3 className="mt-1 text-xl font-semibold text-gray-900">Explore by sector</h3>
                   <p className="text-sm text-gray-600">
-                    Surface the sectors that matter most, see which names are warming up, and jump
-                    into deeper research.
+                    Surface the sectors that matter most, see which names are warming up, and jump into deeper research.
                   </p>
                 </div>
                 <button
@@ -2313,9 +2358,8 @@ const AnalystOS = () => {
                             {sector.freshest?.company || 'TBD'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {(sector.freshnessSource || 'Model')}{' '}
+                            {sector.freshnessSource || 'Model'}{' '}
                             {formatDaysAgoLabel(sector.freshnessDate)}
-                            Model {formatDaysAgoLabel(sector.freshest?.lastModelDate)}
                           </p>
                         </div>
                         <div className="rounded-lg bg-gray-50 p-3">
@@ -2343,8 +2387,103 @@ const AnalystOS = () => {
                 <div className="mt-6 rounded-xl border border-dashed border-gray-200 p-8 text-center text-gray-500">
                   <p className="text-lg font-medium text-gray-900">Add coverage to unlock insights</p>
                   <p className="mt-1 text-sm">
-                    Once you add companies with sector tags, we’ll surface research-ready groupings
-                    here.
+                    Once you add companies with sector tags, we’ll surface research-ready groupings here.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-4 border-b pb-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+                    <MessageSquare size={18} />
+                    Research notes
+                  </div>
+                  <h3 className="mt-1 text-xl font-semibold text-gray-900">Recent notes & performance</h3>
+                  <p className="text-sm text-gray-600">
+                    See what you wrote and how each name has traded since the note was published.
+                  </p>
+                </div>
+                <button
+                  onClick={loadRecentNotes}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Refresh notes
+                </button>
+              </div>
+              {recentNotesError && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {recentNotesError}
+                </div>
+              )}
+              {recentNotesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500" />
+                </div>
+              ) : recentNotes.length > 0 ? (
+                <div className="mt-6 overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
+                        <th className="py-2 pr-4">Note</th>
+                        <th className="py-2 pr-4">What we wrote</th>
+                        <th className="py-2 pr-4">Return since note</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {recentNotes.map((note) => (
+                        <tr key={note.id || `${note.ticker}-${note.created_at}`}>
+                          <td className="py-3 pr-4 align-top">
+                            <div className="font-semibold text-gray-900">{note.title || 'Untitled note'}</div>
+                            <p className="text-xs text-gray-500">
+                              {note.symbol || note.ticker || '—'} •{' '}
+                              {note.created_at ? new Date(note.created_at).toLocaleDateString() : 'Unknown date'}
+                            </p>
+                          </td>
+                          <td className="py-3 pr-4 align-top">
+                            <p className="text-sm text-gray-700">{getNotePreview(note.content)}</p>
+                            <p className="mt-2 text-xs text-gray-500">
+                              Written at {formatCurrencyValue(note.entryPrice)}
+                            </p>
+                          </td>
+                          <td className="py-3 pr-4 align-top">
+                            {note.pctReturn !== null && note.pctReturn !== undefined ? (
+                              <>
+                                <span
+                                  className={`text-sm font-semibold ${
+                                    note.pctReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}
+                                >
+                                  {`${note.pctReturn >= 0 ? '+' : ''}${note.pctReturn.toFixed(1)}%`}
+                                </span>
+                                {note.absReturn !== null && (
+                                  <p className="text-xs text-gray-500">
+                                    {note.absReturn >= 0 ? '+' : '-'}
+                                    {formatCurrencyValue(Math.abs(note.absReturn))} vs{' '}
+                                    {formatCurrencyValue(note.entryPrice)}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-sm text-gray-500">Awaiting price data</span>
+                            )}
+                            {note.currentPrice !== null && (
+                              <p className="text-xs text-gray-500">
+                                Now {formatCurrencyValue(note.currentPrice)}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="mt-6 rounded-xl border border-dashed border-gray-200 p-8 text-center text-gray-500">
+                  <p className="text-lg font-medium text-gray-900">No notes yet</p>
+                  <p className="mt-1 text-sm">
+                    Publish a note from any company workspace to start tracking performance here.
                   </p>
                 </div>
               )}
