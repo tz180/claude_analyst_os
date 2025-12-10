@@ -24,6 +24,21 @@ const getLocalDate = () => {
   return `${year}-${month}-${day}`;
 };
 
+// Normalize nullable numeric values before persisting to the database
+const parseNullableNumber = (value) => {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '' || trimmed === '-') return null;
+    const parsed = parseFloat(trimmed.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 // Temporary: Remove user_id requirement for development
 // This will be restored when we implement proper authentication
 
@@ -1214,7 +1229,7 @@ export const stockNotesServices = {
   // Add a new note
   async addNote(noteData) {
     console.log('stockNotesServices.addNote called with:', noteData);
-    
+
     const userId = await getCurrentUserId();
     console.log('Current user ID:', userId);
     
@@ -1226,8 +1241,8 @@ export const stockNotesServices = {
       title: noteData.title,
       content: noteData.content,
       price_when_written: noteData.priceWhenWritten,
-      ev_to_ebitda_when_written: noteData.evToEbitdaWhenWritten,
-      ev_to_revenue_when_written: noteData.evToRevenueWhenWritten,
+      ev_to_ebitda_when_written: parseNullableNumber(noteData.evToEbitdaWhenWritten),
+      ev_to_revenue_when_written: parseNullableNumber(noteData.evToRevenueWhenWritten),
       created_at: new Date().toISOString()
     };
     

@@ -2,6 +2,21 @@
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
+// Helper to normalize numeric values coming from Alpha Vantage
+const parseNullableNumber = (value) => {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '' || trimmed === '-') return null;
+    const parsed = parseFloat(trimmed.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 // Debug logging
 console.log('=== ENVIRONMENT DEBUG ===');
 console.log('process.env.REACT_APP_ALPHA_VANTAGE_API_KEY:', process.env.REACT_APP_ALPHA_VANTAGE_API_KEY);
@@ -302,28 +317,28 @@ export const stockServices = {
           country: data.Country,
           sector: data.Sector,
           industry: data.Industry,
-          marketCap: data.MarketCapitalization,
-          enterpriseValue: data.EnterpriseValue || data.MarketCapitalization, // Use EV if available, otherwise use market cap
-          peRatio: data.PERatio,
-          priceToBook: data.PriceToBookRatio,
-          dividendYield: data.DividendYield,
-          eps: data.EPS,
-          beta: data.Beta,
-          fiftyTwoWeekHigh: data['52WeekHigh'],
-          fiftyTwoWeekLow: data['52WeekLow'],
-          fiftyDayAverage: data['50DayMovingAverage'],
-          twoHundredDayAverage: data['200DayMovingAverage'],
+          marketCap: parseNullableNumber(data.MarketCapitalization),
+          enterpriseValue: parseNullableNumber(data.EnterpriseValue) || parseNullableNumber(data.MarketCapitalization), // Use EV if available, otherwise use market cap
+          peRatio: parseNullableNumber(data.PERatio),
+          priceToBook: parseNullableNumber(data.PriceToBookRatio),
+          dividendYield: parseNullableNumber(data.DividendYield),
+          eps: parseNullableNumber(data.EPS),
+          beta: parseNullableNumber(data.Beta),
+          fiftyTwoWeekHigh: parseNullableNumber(data['52WeekHigh']),
+          fiftyTwoWeekLow: parseNullableNumber(data['52WeekLow']),
+          fiftyDayAverage: parseNullableNumber(data['50DayMovingAverage']),
+          twoHundredDayAverage: parseNullableNumber(data['200DayMovingAverage']),
           // Additional valuation metrics
-          evToEbitda: data.EVToEBITDA,
-          evToRevenue: data.EVToRevenue,
-          evToEBIT: data.EVToEBIT,
+          evToEbitda: parseNullableNumber(data.EVToEBITDA),
+          evToRevenue: parseNullableNumber(data.EVToRevenue),
+          evToEBIT: parseNullableNumber(data.EVToEBIT),
           // Financial metrics
-          revenue: data.RevenueTTM,
-          ebitda: data.EBITDA,
-          ebit: data.EBIT,
-          netIncome: data.NetIncomeTTM,
-          totalDebt: data.TotalDebt,
-          cashAndEquivalents: data.CashAndCashEquivalents
+          revenue: parseNullableNumber(data.RevenueTTM),
+          ebitda: parseNullableNumber(data.EBITDA),
+          ebit: parseNullableNumber(data.EBIT),
+          netIncome: parseNullableNumber(data.NetIncomeTTM),
+          totalDebt: parseNullableNumber(data.TotalDebt),
+          cashAndEquivalents: parseNullableNumber(data.CashAndCashEquivalents)
         }
       };
     } catch (error) {
