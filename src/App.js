@@ -2037,6 +2037,7 @@ const AnalystOS = () => {
               freshest,
               freshnessSource,
               freshnessDate
+              freshest
             };
           })
           .sort((a, b) => b.count - a.count)
@@ -2314,6 +2315,7 @@ const AnalystOS = () => {
                           <p className="text-xs text-gray-500">
                             {(sector.freshnessSource || 'Model')}{' '}
                             {formatDaysAgoLabel(sector.freshnessDate)}
+                            Model {formatDaysAgoLabel(sector.freshest?.lastModelDate)}
                           </p>
                         </div>
                         <div className="rounded-lg bg-gray-50 p-3">
