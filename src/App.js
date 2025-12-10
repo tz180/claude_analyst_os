@@ -2027,12 +2027,16 @@ const AnalystOS = () => {
                 getDaysAgo(a.lastMemoDate || a.lastModelDate) -
                 getDaysAgo(b.lastMemoDate || b.lastModelDate)
             )[0];
+            const freshnessSource = freshest?.lastMemoDate ? 'Memo' : 'Model';
+            const freshnessDate = freshest?.lastMemoDate || freshest?.lastModelDate;
             return {
               sectorName,
               count: companies.length,
               highlightTickers,
               overdue,
-              freshest
+              freshest,
+              freshnessSource,
+              freshnessDate
             };
           })
           .sort((a, b) => b.count - a.count)
@@ -2308,7 +2312,8 @@ const AnalystOS = () => {
                             {sector.freshest?.company || 'TBD'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Model {formatDaysAgoLabel(sector.freshest?.lastModelDate)}
+                            {(sector.freshnessSource || 'Model')}{' '}
+                            {formatDaysAgoLabel(sector.freshnessDate)}
                           </p>
                         </div>
                         <div className="rounded-lg bg-gray-50 p-3">
