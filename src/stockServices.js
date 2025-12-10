@@ -318,7 +318,7 @@ export const stockServices = {
           sector: data.Sector,
           industry: data.Industry,
           marketCap: parseNullableNumber(data.MarketCapitalization),
-          enterpriseValue: parseNullableNumber(data.EnterpriseValue) || parseNullableNumber(data.MarketCapitalization), // Use EV if available, otherwise use market cap
+          enterpriseValue: parseNullableNumber(data.EnterpriseValue) ?? parseNullableNumber(data.MarketCapitalization), // Use EV if available, otherwise use market cap
           peRatio: parseNullableNumber(data.PERatio),
           priceToBook: parseNullableNumber(data.PriceToBookRatio),
           dividendYield: parseNullableNumber(data.DividendYield),
