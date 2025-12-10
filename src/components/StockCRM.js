@@ -1,7 +1,51 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft, Target, FileText } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, MessageSquare, Plus, ArrowLeft, Target, FileText, CalendarDays, Clock, RefreshCcw, AlertCircle } from 'lucide-react';
 import { stockServices } from '../stockServices';
 import { analyticsServices, stockNotesServices } from '../supabaseServices';
+
+const normalizeEarningsEvents = (rawData) => {
+  if (!rawData) {
+    return [];
+  }
+
+  const source = Array.isArray(rawData)
+    ? rawData
+    : Array.isArray(rawData.earningsCalendar)
+      ? rawData.earningsCalendar
+      : Array.isArray(rawData.earnings)
+        ? rawData.earnings
+        : [];
+
+  return source
+    .map((event) => {
+      const reportDate =
+        event.reportDate ||
+        event.report_date ||
+        event.earningsDate ||
+        event.earnings_date ||
+        event.fiscalDateEnding ||
+        event.date;
+
+      if (!reportDate) {
+        return null;
+      }
+
+      return {
+        ...event,
+        reportDate,
+        fiscalDateEnding: event.fiscalDateEnding || event.fiscal_date || event.fiscalDate,
+        estimate:
+          event.estimate ??
+          event.epsEstimate ??
+          event.eps ??
+          event.revenue ??
+          event.revenueEstimate,
+        time: event.time || event.reportTime || event.earningsTime,
+        currency: event.currency || 'USD'
+      };
+    })
+    .filter(Boolean);
+};
 
 const StockCRM = ({ ticker, onBack }) => {
   const [stockData, setStockData] = useState(null);
@@ -14,6 +58,31 @@ const StockCRM = ({ ticker, onBack }) => {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [notes, setNotes] = useState([]);
   const [connectedData, setConnectedData] = useState(null);
+  const [earningsEvents, setEarningsEvents] = useState([]);
+  const [earningsLoading, setEarningsLoading] = useState(false);
+  const [earningsError, setEarningsError] = useState(null);
+
+  const loadEarningsCalendar = useCallback(async (symbol) => {
+    if (!symbol) return;
+    setEarningsLoading(true);
+    setEarningsError(null);
+
+    try {
+      const result = await stockServices.getEarningsCalendar(symbol);
+      if (result.success) {
+        setEarningsEvents(normalizeEarningsEvents(result.data));
+      } else {
+        setEarningsEvents([]);
+        setEarningsError(result.error || 'Unable to load earnings calendar.');
+      }
+    } catch (calendarError) {
+      console.error('Error loading earnings calendar:', calendarError);
+      setEarningsEvents([]);
+      setEarningsError(calendarError.message);
+    } finally {
+      setEarningsLoading(false);
+    }
+  }, []);
 
   const loadStockData = useCallback(async () => {
     setLoading(true);
@@ -42,13 +111,14 @@ const StockCRM = ({ ticker, onBack }) => {
       const notesResult = await stockNotesServices.getNotes(ticker);
       setNotes(notesResult);
 
+      await loadEarningsCalendar(ticker);
     } catch (err) {
       setError('Failed to load stock data');
       console.error('Error loading stock data:', err);
     } finally {
       setLoading(false);
     }
-  }, [ticker]);
+  }, [ticker, loadEarningsCalendar]);
 
   useEffect(() => {
     if (ticker) {
@@ -86,6 +156,55 @@ const StockCRM = ({ ticker, onBack }) => {
     }
     return formatCurrency(num);
   };
+
+  const formatEventDate = (value) => {
+    if (!value) return 'TBD';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const formatEstimateValue = (value) => {
+    if (value === undefined || value === null || value === '') return '—';
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) return value;
+    if (Math.abs(numeric) >= 100) {
+      return numeric.toFixed(0);
+    }
+    return numeric.toFixed(2);
+  };
+
+  const formatEventTime = (value) => {
+    if (!value) return 'TBD';
+    return value.toString().toUpperCase();
+  };
+
+  const earningsTimeline = useMemo(() => {
+    if (!earningsEvents || earningsEvents.length === 0) {
+      return { upcoming: [], past: [] };
+    }
+
+    const validEvents = earningsEvents
+      .map((event) => {
+        const parsedDate = new Date(event.reportDate);
+        if (Number.isNaN(parsedDate.getTime())) {
+          return null;
+        }
+        return { ...event, parsedDate };
+      })
+      .filter(Boolean);
+
+    const sorted = validEvents.sort((a, b) => a.parsedDate - b.parsedDate);
+    const now = new Date();
+    const upcoming = sorted.filter((event) => event.parsedDate >= now).slice(0, 4);
+    const past = sorted.filter((event) => event.parsedDate < now).slice(-4).reverse();
+
+    return { upcoming, past };
+  }, [earningsEvents]);
 
   const saveNote = async () => {
     console.log('saveNote called with:', { newNote, newNoteTitle, stockData, companyData });
@@ -579,10 +698,170 @@ const StockCRM = ({ ticker, onBack }) => {
 
           {/* Calendar Tab */}
           {activeTab === 'calendar' && (
-            <div className="text-center text-gray-500 py-8">
-              <Calendar size={48} className="mx-auto mb-2 text-gray-300" />
-              <p>Earnings calendar and events will appear here.</p>
-              <p className="text-sm">Coming soon...</p>
+            <div className="space-y-6">
+              <div className="flex flex-col gap-4 border-b pb-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3">
+                  <CalendarDays size={24} className="text-blue-600" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Earnings Calendar</h3>
+                    <p className="text-sm text-gray-600">
+                      Upcoming catalysts and recent prints for {ticker}.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => loadEarningsCalendar(ticker)}
+                  className="inline-flex items-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <RefreshCcw size={16} className="mr-2" />
+                  Refresh calendar
+                </button>
+              </div>
+
+              {earningsError && (
+                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <AlertCircle size={16} />
+                  <span>{earningsError}</span>
+                </div>
+              )}
+
+              {earningsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500" />
+                </div>
+              ) : earningsEvents.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center text-gray-500">
+                  <Calendar size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p className="text-base font-medium text-gray-900">No earnings data available</p>
+                  <p className="text-sm text-gray-500">
+                    We couldn’t find upcoming or historical earnings for this ticker right now.
+                  </p>
+                  <button
+                    onClick={() => loadEarningsCalendar(ticker)}
+                    className="mt-4 inline-flex items-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Try refresh
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-xl border border-gray-100 p-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-base font-semibold text-gray-900">Upcoming earnings</h4>
+                        <span className="text-xs text-gray-500">
+                          Next {earningsTimeline.upcoming.length || 0}
+                        </span>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {earningsTimeline.upcoming.length > 0 ? (
+                          earningsTimeline.upcoming.map((event, index) => (
+                            <div
+                              key={`upcoming-${event.reportDate}-${index}`}
+                              className="rounded-lg border border-gray-100 p-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {formatEventDate(event.reportDate)}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    Fiscal ending {event.fiscalDateEnding || 'TBD'}
+                                  </p>
+                                </div>
+                                <div className="text-right text-sm font-semibold text-gray-900">
+                                  {formatEstimateValue(event.estimate)} {event.currency || ''}
+                                  <div className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+                                    <Clock size={12} />
+                                    {formatEventTime(event.time)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-500">No future events scheduled.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-gray-100 p-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-base font-semibold text-gray-900">Recent prints</h4>
+                        <span className="text-xs text-gray-500">
+                          Last {earningsTimeline.past.length || 0}
+                        </span>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {earningsTimeline.past.length > 0 ? (
+                          earningsTimeline.past.map((event, index) => (
+                            <div
+                              key={`past-${event.reportDate}-${index}`}
+                              className="rounded-lg bg-gray-50 p-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {formatEventDate(event.reportDate)}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    Fiscal ending {event.fiscalDateEnding || 'TBD'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {formatEstimateValue(event.estimate)} {event.currency || ''}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {formatEventTime(event.time)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-500">No recent events recorded.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-100">
+                    <div className="border-b px-4 py-3">
+                      <h4 className="text-base font-semibold text-gray-900">Full calendar</h4>
+                      <p className="text-sm text-gray-500">Sorted by report date</p>
+                    </div>
+                    <div className="divide-y">
+                      {[...earningsEvents]
+                        .sort((a, b) => new Date(a.reportDate) - new Date(b.reportDate))
+                        .slice(0, 12)
+                        .map((event, index) => (
+                          <div
+                            key={`calendar-${event.reportDate}-${index}`}
+                            className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm"
+                          >
+                            <div className="flex-1 min-w-[180px]">
+                              <p className="font-medium text-gray-900">
+                                {formatEventDate(event.reportDate)}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Fiscal ending {event.fiscalDateEnding || 'TBD'}
+                              </p>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="font-semibold text-gray-900">
+                                {formatEstimateValue(event.estimate)} {event.currency || ''}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {formatEventTime(event.time)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
