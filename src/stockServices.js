@@ -17,6 +17,87 @@ const parseNullableNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+// Alpha Vantage occasionally returns CSV for calendar endpoints; keep parsing simple but reliable
+const parseCsvToObjects = (text) => {
+  if (!text) return [];
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length <= 1) {
+    return [];
+  }
+
+  const headers = lines[0].split(',').map((header) => header.trim());
+
+  return lines.slice(1).map((line) => {
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i];
+
+      if (char === '"') {
+        if (line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current);
+
+    const row = {};
+    headers.forEach((header, idx) => {
+      const rawValue = values[idx] ?? '';
+      row[header] = rawValue.replace(/^"|"$/g, '').trim();
+    });
+    return row;
+  });
+};
+
+const parseEarningsCalendarBody = (text) => {
+  const trimmed = text?.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return JSON.parse(trimmed);
+  }
+
+  if (/^symbol\s*,/i.test(trimmed)) {
+    return parseCsvToObjects(trimmed);
+  }
+
+  return { message: trimmed };
+};
+
+const computeEnterpriseValue = (rawEV, marketCap, totalDebt, cashAndEquivalents) => {
+  if (rawEV !== null && rawEV !== undefined) {
+    return rawEV;
+  }
+
+  if (marketCap == null) {
+    return null;
+  }
+
+  const debtValue = totalDebt ?? 0;
+  const cashValue = cashAndEquivalents ?? 0;
+
+  if (totalDebt == null && cashAndEquivalents == null) {
+    return marketCap;
+  }
+
+  return marketCap + debtValue - cashValue;
+};
+
 // Build a stock quote object from time series data (daily fallback)
 const buildQuoteFromSeries = (symbol, latestDate, latestValues, previousValues) => {
   const price = parseFloat(latestValues['4. close']);
@@ -319,6 +400,11 @@ export const stockServices = {
         return { success: false, error: 'No company data found for this symbol' };
       }
       
+      const marketCap = parseNullableNumber(data.MarketCapitalization);
+      const totalDebt = parseNullableNumber(data.TotalDebt);
+      const cashAndEquivalents = parseNullableNumber(data.CashAndCashEquivalents);
+      const enterpriseValueRaw = parseNullableNumber(data.EnterpriseValue);
+
       return {
         success: true,
         data: {
@@ -330,8 +416,8 @@ export const stockServices = {
           country: data.Country,
           sector: data.Sector,
           industry: data.Industry,
-          marketCap: parseNullableNumber(data.MarketCapitalization),
-          enterpriseValue: parseNullableNumber(data.EnterpriseValue) ?? parseNullableNumber(data.MarketCapitalization), // Use EV if available, otherwise use market cap
+          marketCap,
+          enterpriseValue: computeEnterpriseValue(enterpriseValueRaw, marketCap, totalDebt, cashAndEquivalents),
           peRatio: parseNullableNumber(data.PERatio),
           priceToBook: parseNullableNumber(data.PriceToBookRatio),
           dividendYield: parseNullableNumber(data.DividendYield),
@@ -350,8 +436,8 @@ export const stockServices = {
           ebitda: parseNullableNumber(data.EBITDA),
           ebit: parseNullableNumber(data.EBIT),
           netIncome: parseNullableNumber(data.NetIncomeTTM),
-          totalDebt: parseNullableNumber(data.TotalDebt),
-          cashAndEquivalents: parseNullableNumber(data.CashAndCashEquivalents)
+          totalDebt,
+          cashAndEquivalents
         }
       };
     } catch (error) {
@@ -489,19 +575,42 @@ export const stockServices = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const data = await response.json();
-      
-      if (data['Error Message']) {
-        return { success: false, error: data['Error Message'] };
+      const rawText = await response.text();
+      let parsedBody;
+      try {
+        parsedBody = parseEarningsCalendarBody(rawText);
+      } catch (parseError) {
+        console.error('Unable to parse earnings calendar payload:', parseError);
+        return { success: false, error: 'Unable to parse earnings calendar response.' };
       }
-      
-      if (data['Note']) {
-        return { success: false, error: 'API rate limit exceeded. Please try again later.' };
+
+      if (!parsedBody) {
+        return { success: false, error: 'No earnings calendar data returned.' };
       }
-      
+
+      const isObject = !Array.isArray(parsedBody) && typeof parsedBody === 'object';
+      const errorMessage = isObject
+        ? parsedBody['Error Message'] ||
+          parsedBody['Information'] ||
+          parsedBody['Note'] ||
+          parsedBody.message
+        : null;
+
+      if (errorMessage) {
+        return { success: false, error: errorMessage };
+      }
+
+      const normalized =
+        Array.isArray(parsedBody)
+          ? parsedBody
+          : parsedBody.earningsCalendar ||
+            parsedBody.earnings ||
+            parsedBody.data ||
+            [];
+
       return {
         success: true,
-        data: data
+        data: normalized
       };
     } catch (error) {
       console.error('Error fetching earnings calendar:', error);

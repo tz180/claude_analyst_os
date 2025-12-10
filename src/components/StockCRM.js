@@ -183,6 +183,32 @@ const StockCRM = ({ ticker, onBack }) => {
     return value.toString().toUpperCase();
   };
 
+  const summarizeNoteContent = (content, maxLength = 140) => {
+    if (!content) return '—';
+    if (content.length <= maxLength) return content;
+    return `${content.slice(0, maxLength - 1)}…`;
+  };
+
+  const getNotePerformance = (note) => {
+    if (!note || !stockData?.price || !note.price_when_written) {
+      return null;
+    }
+
+    const entryPrice = parseFloat(note.price_when_written);
+    if (!Number.isFinite(entryPrice) || entryPrice === 0) {
+      return null;
+    }
+
+    const diff = stockData.price - entryPrice;
+    const pct = (diff / entryPrice) * 100;
+
+    return {
+      diff,
+      pct,
+      isPositive: diff >= 0
+    };
+  };
+
   const earningsTimeline = useMemo(() => {
     if (!earningsEvents || earningsEvents.length === 0) {
       return { upcoming: [], past: [] };
@@ -647,6 +673,66 @@ const StockCRM = ({ ticker, onBack }) => {
                   </div>
                 )}
               </div>
+
+              {notes.length > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-white">
+                  <div className="border-b px-4 py-3">
+                    <h4 className="text-sm font-semibold text-gray-900">Notes at a glance</h4>
+                    <p className="text-xs text-gray-500">
+                      Quick view of what was written and performance since publication.
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-100 text-sm">
+                      <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                        <tr>
+                          <th scope="col" className="py-3 pl-4 pr-3 text-left">Note</th>
+                          <th scope="col" className="px-3 py-3 text-left">What was written</th>
+                          <th scope="col" className="py-3 pl-3 pr-4 text-right">Return since note</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {notes.map((note, index) => {
+                          const performance = getNotePerformance(note);
+                          const createdAt = note.created_at
+                            ? new Date(note.created_at).toLocaleDateString()
+                            : '—';
+                          const perfClass = performance
+                            ? performance.isPositive
+                              ? 'text-green-600'
+                              : 'text-red-600'
+                            : 'text-gray-500';
+
+                          return (
+                            <tr key={`note-table-${index}`}>
+                              <td className="py-3 pl-4 pr-3 align-top">
+                                <div className="font-medium text-gray-900">{note.title || 'Untitled note'}</div>
+                                <div className="text-xs text-gray-500">{createdAt}</div>
+                              </td>
+                              <td className="px-3 py-3 align-top text-gray-600">
+                                {summarizeNoteContent(note.content)}
+                              </td>
+                              <td className={`py-3 pl-3 pr-4 text-right font-semibold ${perfClass}`}>
+                                {performance ? (
+                                  <>
+                                    {performance.isPositive ? '+' : '-'}
+                                    {Math.abs(performance.pct).toFixed(1)}%
+                                    <span className="ml-1 text-xs font-normal text-gray-500">
+                                      ({formatCurrency(Math.abs(performance.diff))})
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Memos & Models Section */}
               <div>
