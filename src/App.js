@@ -2024,8 +2024,8 @@ const AnalystOS = () => {
               .map((company) => company.ticker.toUpperCase());
             const freshest = [...companies].sort(
               (a, b) =>
-                getDaysAgo(a.lastModelDate || a.lastMemoDate) -
-                getDaysAgo(b.lastModelDate || b.lastMemoDate)
+                getDaysAgo(a.lastMemoDate || a.lastModelDate) -
+                getDaysAgo(b.lastMemoDate || b.lastModelDate)
             )[0];
             return {
               sectorName,
