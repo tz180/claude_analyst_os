@@ -17,6 +17,75 @@ const parseNullableNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+// Build a stock quote object from time series data (daily fallback)
+const buildQuoteFromSeries = (symbol, latestDate, latestValues, previousValues) => {
+  const price = parseFloat(latestValues['4. close']);
+  const previousClose = previousValues ? parseFloat(previousValues['4. close']) : price;
+  const change = previousClose ? price - previousClose : 0;
+  const changePercent =
+    previousClose && previousClose !== 0
+      ? `${((change / previousClose) * 100).toFixed(2)}%`
+      : '0.00%';
+
+  return {
+    symbol,
+    price,
+    change,
+    changePercent,
+    volume: parseInt(latestValues['5. volume']),
+    previousClose,
+    open: parseFloat(latestValues['1. open']),
+    high: parseFloat(latestValues['2. high']),
+    low: parseFloat(latestValues['3. low']),
+    lastUpdated: latestDate
+  };
+};
+
+const fetchDailyQuoteFallback = async (symbol) => {
+  console.log('Falling back to TIME_SERIES_DAILY for', symbol);
+  const response = await fetch(
+    `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${ALPHA_VANTAGE_API_KEY}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('TIME_SERIES_DAILY response keys:', Object.keys(data));
+
+  if (data['Error Message']) {
+    const normalizedError = data['Error Message'].includes('TIME_SERIES_INTRADAY')
+      ? 'Alpha Vantage cannot return intraday data for this ticker on the current plan. Please try another symbol or wait before retrying.'
+      : data['Error Message'];
+    return { success: false, error: normalizedError };
+  }
+
+  if (data['Note']) {
+    return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
+  }
+
+  const timeSeriesData = data['Time Series (Daily)'];
+  if (!timeSeriesData || Object.keys(timeSeriesData).length === 0) {
+    return {
+      success: false,
+      error: `No daily price data found for symbol: ${symbol}.`
+    };
+  }
+
+  const sortedEntries = Object.entries(timeSeriesData).sort(
+    (a, b) => new Date(b[0]) - new Date(a[0])
+  );
+
+  const [latestDate, latestValues] = sortedEntries[0];
+  const previousValues = sortedEntries[1]?.[1];
+
+  return {
+    success: true,
+    data: buildQuoteFromSeries(symbol, latestDate, latestValues, previousValues)
+  };
+};
+
 // Debug logging
 console.log('=== ENVIRONMENT DEBUG ===');
 console.log('process.env.REACT_APP_ALPHA_VANTAGE_API_KEY:', process.env.REACT_APP_ALPHA_VANTAGE_API_KEY);
@@ -142,65 +211,9 @@ export const stockServices = {
       
       const quote = quoteData['Global Quote'];
       if (!quote || Object.keys(quote).length === 0) {
-        console.log('No GLOBAL_QUOTE data, trying TIME_SERIES_INTRADAY...');
-        
-        // Fallback to TIME_SERIES_INTRADAY
-        const response = await fetch(
-          `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&apikey=${ALPHA_VANTAGE_API_KEY}`
-        );
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('TIME_SERIES_INTRADAY response:', data);
-        console.log('TIME_SERIES_INTRADAY response keys:', Object.keys(data));
-        
-        if (data['Error Message']) {
-          return { success: false, error: data['Error Message'] };
-        }
-        
-        if (data['Note']) {
-          return { success: false, error: `API rate limit exceeded: ${data['Note']}` };
-        }
-        
-        // Check for Alpha Vantage information message (rate limit)
-        if (data['Information'] && data['Information'].includes('API key')) {
-          console.log('Alpha Vantage rate limit detected:', data['Information']);
-          return { 
-            success: false, 
-            error: `Alpha Vantage free tier limit reached. Please wait a few minutes and try again, or upgrade to premium for unlimited access.` 
-          };
-        }
-        
-        // Check if we have time series data
-        const timeSeriesData = data['Time Series (1min)'];
-        if (!timeSeriesData || Object.keys(timeSeriesData).length === 0) {
-          return { success: false, error: `No data found for symbol: ${symbol}. This could be due to rate limits or the symbol not being available in the free tier. Try again in a few minutes.` };
-        }
-        
-        // Parse TIME_SERIES_INTRADAY data
-        const latestTime = Object.keys(timeSeriesData)[0];
-        const latestData = timeSeriesData[latestTime];
-        
-        console.log('Latest time series data:', latestData);
-        
-        return {
-          success: true,
-          data: {
-            symbol: symbol,
-            price: parseFloat(latestData['4. close']),
-            change: 0, // We'll calculate this if needed
-            changePercent: '0.00%', // We'll calculate this if needed
-            volume: parseInt(latestData['5. volume']),
-            previousClose: parseFloat(latestData['4. close']), // Same as current for now
-            open: parseFloat(latestData['1. open']),
-            high: parseFloat(latestData['2. high']),
-            low: parseFloat(latestData['3. low']),
-            lastUpdated: latestTime
-          }
-        };
+        console.log('No GLOBAL_QUOTE data, falling back to daily series...');
+        const fallbackResult = await fetchDailyQuoteFallback(symbol);
+        return fallbackResult;
       }
       
       console.log('GLOBAL_QUOTE data found:', quote);
