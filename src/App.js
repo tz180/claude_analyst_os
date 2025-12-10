@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, ArrowRight, CalendarDays, Compass, Layers, Sparkles } from 'lucide-react';
+import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, ArrowRight, Compass, Layers, Sparkles } from 'lucide-react';
 import './App.css';
 import { supabase } from './supabase';
 import { 
@@ -2003,49 +2003,7 @@ const AnalystOS = () => {
             return aDays - bDays;
           })
           .slice(0, 6);
-        const sectorInsights = Object.entries(
-          coverage.reduce((acc, company) => {
-            const key = company.sector || 'General';
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(company);
-            return acc;
-          }, {})
-        )
-          .map(([sectorName, companies]) => {
-            const overdue = companies.filter(
-              (company) => !company.lastMemoDate || getDaysAgo(company.lastMemoDate) > 45
-            ).length;
-            const highlightTickers = companies
-              .filter((company) => company.ticker)
-              .slice(0, 3)
-              .map((company) => company.ticker.toUpperCase());
-            const freshest = [...companies].sort(
-              (a, b) =>
-                getDaysAgo(a.lastMemoDate || a.lastModelDate) -
-                getDaysAgo(b.lastMemoDate || b.lastModelDate)
-            )[0];
-            const freshnessSource = freshest?.lastMemoDate ? 'Memo' : 'Model';
-            const freshnessDate = freshest?.lastMemoDate || freshest?.lastModelDate;
-            return {
-              sectorName,
-              count: companies.length,
-              highlightTickers,
-              overdue,
-              freshest,
-              freshnessSource,
-              freshnessDate
-            };
-          })
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 4);
-        const formatDaysAgoLabel = (date) => {
-          if (!date) return 'Never';
-          const days = getDaysAgo(date);
-          if (days === Infinity) return 'Never';
-          if (days === 0) return 'Today';
-          if (days === 1) return '1 day ago';
-          return `${days} days ago`;
-        };
+        
 
         return (
           <div className="space-y-6">
@@ -2067,7 +2025,7 @@ const AnalystOS = () => {
                     {memosDue} due
                   </span>
                 </div>
-                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-xl border border-gray-100 p-4">
                     <div className="flex items-center text-sm text-gray-500">
                       <Layers size={16} className="mr-2 text-blue-500" />
@@ -2081,13 +2039,6 @@ const AnalystOS = () => {
                       Sectors
                     </div>
                     <div className="mt-2 text-3xl font-semibold text-gray-900">{uniqueSectors.length}</div>
-                  </div>
-                  <div className="rounded-xl border border-gray-100 p-4">
-                    <div className="flex items-center text-sm text-gray-500">
-                      <CalendarDays size={16} className="mr-2 text-blue-500" />
-                      Memos due
-                    </div>
-                    <div className="mt-2 text-3xl font-semibold text-gray-900">{memosDue}</div>
                   </div>
                 </div>
               </div>
@@ -2229,94 +2180,6 @@ const AnalystOS = () => {
               )}
             </div>
 
-            <div className="rounded-2xl border bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-4 border-b pb-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-medium text-purple-600">
-                    <Compass size={18} />
-                    Research playground
-                  </div>
-                  <h3 className="mt-1 text-xl font-semibold text-gray-900">Explore by sector</h3>
-                  <p className="text-sm text-gray-600">
-                    Surface the sectors that matter most, see which names are warming up, and jump
-                    into deeper research.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setCurrentView('memos')}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  View Deliverables
-                </button>
-              </div>
-              {sectorInsights.length > 0 ? (
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  {sectorInsights.map((sector) => (
-                    <div
-                      key={sector.sectorName}
-                      className="rounded-xl border border-gray-100 p-5 transition hover:border-purple-200 hover:shadow-md"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-gray-500">
-                            {sector.sectorName}
-                          </p>
-                          <h4 className="text-lg font-semibold text-gray-900">
-                            {sector.sectorName}
-                          </h4>
-                        </div>
-                        <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">
-                          {sector.count} {sector.count === 1 ? 'name' : 'names'}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm text-gray-600">
-                        {sector.highlightTickers.length > 0
-                          ? `Focus on ${sector.highlightTickers.join(', ')} to keep this pocket current.`
-                          : 'Add tickers to this sector to build context faster.'}
-                      </p>
-                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-lg bg-gray-50 p-3">
-                          <p className="text-xs uppercase tracking-wide text-gray-500">Up next</p>
-                          <p className="font-medium text-gray-900">
-                            {sector.freshest?.company || 'TBD'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(sector.freshnessSource || 'Model')}{' '}
-                            {formatDaysAgoLabel(sector.freshnessDate)}
-                            Model {formatDaysAgoLabel(sector.freshest?.lastModelDate)}
-                          </p>
-                        </div>
-                        <div className="rounded-lg bg-gray-50 p-3">
-                          <p className="text-xs uppercase tracking-wide text-gray-500">
-                            Memos due
-                          </p>
-                          <p className="text-2xl font-semibold text-gray-900">{sector.overdue}</p>
-                          <p className="text-xs text-gray-500">Need refresh</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setCoverageSearch(sector.sectorName === 'General' ? '' : sector.sectorName);
-                          setCurrentView('coverage');
-                        }}
-                        className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700"
-                      >
-                        Dive into {sector.sectorName}
-                        <ArrowRight size={16} className="ml-2" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-6 rounded-xl border border-dashed border-gray-200 p-8 text-center text-gray-500">
-                  <p className="text-lg font-medium text-gray-900">Add coverage to unlock insights</p>
-                  <p className="mt-1 text-sm">
-                    Once you add companies with sector tags, we’ll surface research-ready groupings
-                    here.
-                  </p>
-                </div>
-              )}
-            </div>
           </div>
         );
       }

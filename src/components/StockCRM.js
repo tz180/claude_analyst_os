@@ -57,10 +57,19 @@ const StockCRM = ({ ticker, onBack }) => {
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [notes, setNotes] = useState([]);
+  const [noteSort, setNoteSort] = useState('newest');
   const [connectedData, setConnectedData] = useState(null);
   const [earningsEvents, setEarningsEvents] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
   const [earningsError, setEarningsError] = useState(null);
+
+  const noteSortLabels = {
+    newest: 'Newest first',
+    oldest: 'Oldest first',
+    bestReturn: 'Best return',
+    worstReturn: 'Worst return',
+    title: 'Title (A-Z)'
+  };
 
   const loadEarningsCalendar = useCallback(async (symbol) => {
     if (!symbol) return;
@@ -208,6 +217,60 @@ const StockCRM = ({ ticker, onBack }) => {
       isPositive: diff >= 0
     };
   };
+
+  const sortedNotes = useMemo(() => {
+    if (!Array.isArray(notes)) return [];
+
+    const getTimestamp = (note) => {
+      if (!note?.created_at) return 0;
+      const parsed = new Date(note.created_at);
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+    };
+
+    const getPerfPct = (note) => {
+      const performance = getNotePerformance(note);
+      return performance ? performance.pct : null;
+    };
+
+    const sorted = [...notes];
+
+    switch (noteSort) {
+      case 'oldest':
+        sorted.sort((a, b) => getTimestamp(a) - getTimestamp(b));
+        break;
+      case 'bestReturn':
+        sorted.sort((a, b) => {
+          const perfA = getPerfPct(a);
+          const perfB = getPerfPct(b);
+          if (perfA === null && perfB === null) return 0;
+          if (perfA === null) return 1;
+          if (perfB === null) return -1;
+          return perfB - perfA;
+        });
+        break;
+      case 'worstReturn':
+        sorted.sort((a, b) => {
+          const perfA = getPerfPct(a);
+          const perfB = getPerfPct(b);
+          if (perfA === null && perfB === null) return 0;
+          if (perfA === null) return 1;
+          if (perfB === null) return -1;
+          return perfA - perfB;
+        });
+        break;
+      case 'title':
+        sorted.sort((a, b) =>
+          (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' })
+        );
+        break;
+      case 'newest':
+      default:
+        sorted.sort((a, b) => getTimestamp(b) - getTimestamp(a));
+        break;
+    }
+
+    return sorted;
+  }, [notes, noteSort, stockData]);
 
   const earningsTimeline = useMemo(() => {
     if (!earningsEvents || earningsEvents.length === 0) {
@@ -610,109 +673,60 @@ const StockCRM = ({ ticker, onBack }) => {
                 
                 {/* Notes List */}
                 {notes.length > 0 ? (
-                  <div className="space-y-3">
-                    {notes.map((note, index) => (
-                      <div key={index} className="border-l-4 border-blue-500 pl-3 py-2 bg-gray-50 rounded">
-                        <div className="flex justify-between items-start mb-2">
-                          <h5 className="font-medium text-sm">{note.title}</h5>
-                          <div className="text-xs text-gray-500">
-                            {new Date(note.created_at).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-700 mb-2">{note.content}</p>
-                        <div className="space-y-2">
-                          {/* Price tracking */}
-                          <div className="flex items-center space-x-4 text-xs text-gray-600">
-                            <span>Price when written: {formatCurrency(note.price_when_written)}</span>
-                            {stockData && (
-                              <span className={`font-medium ${
-                                stockData.price > note.price_when_written ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {stockData.price > note.price_when_written ? '↗' : '↘'} {formatCurrency(Math.abs(stockData.price - note.price_when_written))} ({((Math.abs(stockData.price - note.price_when_written) / note.price_when_written) * 100).toFixed(1)}%)
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Valuation metrics tracking */}
-                          {(note.ev_to_ebitda_when_written || note.ev_to_revenue_when_written) && (
-                            <div className="flex items-center space-x-4 text-xs text-gray-600">
-                              {note.ev_to_ebitda_when_written && (
-                                <span>
-                                  EV/EBITDA when written: {parseFloat(note.ev_to_ebitda_when_written).toFixed(2)}
-                                  {companyData?.evToEbitda && (
-                                    <span className={`ml-2 font-medium ${
-                                      parseFloat(companyData.evToEbitda) > parseFloat(note.ev_to_ebitda_when_written) ? 'text-red-600' : 'text-green-600'
-                                    }`}>
-                                      {parseFloat(companyData.evToEbitda) > parseFloat(note.ev_to_ebitda_when_written) ? '↗' : '↘'} {Math.abs(parseFloat(companyData.evToEbitda) - parseFloat(note.ev_to_ebitda_when_written)).toFixed(2)}
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-                              {note.ev_to_revenue_when_written && (
-                                <span>
-                                  EV/Revenue when written: {parseFloat(note.ev_to_revenue_when_written).toFixed(2)}
-                                  {companyData?.evToRevenue && (
-                                    <span className={`ml-2 font-medium ${
-                                      parseFloat(companyData.evToRevenue) > parseFloat(note.ev_to_revenue_when_written) ? 'text-red-600' : 'text-green-600'
-                                    }`}>
-                                      {parseFloat(companyData.evToRevenue) > parseFloat(note.ev_to_revenue_when_written) ? '↗' : '↘'} {Math.abs(parseFloat(companyData.evToRevenue) - parseFloat(note.ev_to_revenue_when_written)).toFixed(2)}
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                  <div className="rounded-lg border border-gray-200 bg-white">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Saved notes</p>
+                        <p className="text-xs text-gray-500">
+                          {notes.length === 1 ? '1 note saved' : `${notes.length} notes saved`} ·{' '}
+                          {noteSortLabels[noteSort]}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <MessageSquare size={48} className="mx-auto mb-2 text-gray-300" />
-                    <p>No notes yet. Start adding your research notes above.</p>
-                  </div>
-                )}
-              </div>
+                      {notes.length > 1 && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <label htmlFor="note-sort" className="text-gray-500">
+                            Sort by
+                          </label>
+                          <select
+                            id="note-sort"
+                            value={noteSort}
+                            onChange={(e) => setNoteSort(e.target.value)}
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          >
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                            <option value="bestReturn">Best return</option>
+                            <option value="worstReturn">Worst return</option>
+                            <option value="title">Title (A-Z)</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    <div className="max-h-96 divide-y divide-gray-100 overflow-y-auto">
+                      {sortedNotes.map((note, index) => {
+                        const performance = getNotePerformance(note);
+                        const createdAt = note.created_at
+                          ? new Date(note.created_at).toLocaleDateString()
+                          : 'Date unavailable';
+                        const perfClass = performance
+                          ? performance.isPositive
+                            ? 'text-green-600'
+                            : 'text-red-600'
+                          : 'text-gray-500';
 
-              {notes.length > 0 && (
-                <div className="rounded-lg border border-gray-200 bg-white">
-                  <div className="border-b px-4 py-3">
-                    <h4 className="text-sm font-semibold text-gray-900">Notes at a glance</h4>
-                    <p className="text-xs text-gray-500">
-                      Quick view of what was written and performance since publication.
-                    </p>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-100 text-sm">
-                      <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-                        <tr>
-                          <th scope="col" className="py-3 pl-4 pr-3 text-left">Note</th>
-                          <th scope="col" className="px-3 py-3 text-left">What was written</th>
-                          <th scope="col" className="py-3 pl-3 pr-4 text-right">Return since note</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 bg-white">
-                        {notes.map((note, index) => {
-                          const performance = getNotePerformance(note);
-                          const createdAt = note.created_at
-                            ? new Date(note.created_at).toLocaleDateString()
-                            : '—';
-                          const perfClass = performance
-                            ? performance.isPositive
-                              ? 'text-green-600'
-                              : 'text-red-600'
-                            : 'text-gray-500';
-
-                          return (
-                            <tr key={`note-table-${index}`}>
-                              <td className="py-3 pl-4 pr-3 align-top">
-                                <div className="font-medium text-gray-900">{note.title || 'Untitled note'}</div>
-                                <div className="text-xs text-gray-500">{createdAt}</div>
-                              </td>
-                              <td className="px-3 py-3 align-top text-gray-600">
-                                {summarizeNoteContent(note.content)}
-                              </td>
-                              <td className={`py-3 pl-3 pr-4 text-right font-semibold ${perfClass}`}>
+                        return (
+                          <div
+                            key={note.id || note.created_at || index}
+                            className="px-4 py-4 transition hover:bg-gray-50"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {note.title || 'Untitled note'}
+                                </p>
+                                <p className="text-xs text-gray-500">{createdAt}</p>
+                              </div>
+                              <div className={`text-sm font-semibold ${perfClass}`}>
                                 {performance ? (
                                   <>
                                     {performance.isPositive ? '+' : '-'}
@@ -722,17 +736,38 @@ const StockCRM = ({ ticker, onBack }) => {
                                     </span>
                                   </>
                                 ) : (
-                                  <span className="text-gray-400">—</span>
+                                  <span className="text-xs font-normal text-gray-500">Price data unavailable</span>
                                 )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                            </div>
+                            <p className="mt-3 text-sm leading-relaxed text-gray-700 whitespace-pre-line">
+                              {note.content}
+                            </p>
+                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
+                              <span>Price when written: {formatCurrency(note.price_when_written)}</span>
+                              {note.ev_to_ebitda_when_written && (
+                                <span>
+                                  EV/EBITDA: {parseFloat(note.ev_to_ebitda_when_written).toFixed(2)}
+                                </span>
+                              )}
+                              {note.ev_to_revenue_when_written && (
+                                <span>
+                                  EV/Revenue: {parseFloat(note.ev_to_revenue_when_written).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <MessageSquare size={48} className="mx-auto mb-2 text-gray-300" />
+                    <p>No notes yet. Start adding your research notes above.</p>
+                  </div>
+                )}
+              </div>
 
               {/* Memos & Models Section */}
               <div>
