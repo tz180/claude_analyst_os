@@ -1992,9 +1992,6 @@ const AnalystOS = () => {
         const uniqueSectors = Array.from(
           new Set(coverage.map((company) => company.sector).filter(Boolean))
         );
-        const freshModels = coverage.filter(
-          (company) => company.lastModelDate && getDaysAgo(company.lastModelDate) <= 30
-        ).length;
         const memosDue = coverage.filter(
           (company) => !company.lastMemoDate || getDaysAgo(company.lastMemoDate) > 45
         ).length;
@@ -2052,98 +2049,98 @@ const AnalystOS = () => {
 
         return (
           <div className="space-y-6">
-            <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-800 p-8 text-white shadow-lg">
-              <div className="grid gap-8 lg:grid-cols-2">
-                <div className="space-y-6">
-                  <div className="inline-flex items-center space-x-2 text-sm uppercase tracking-wider text-white/80">
-                    <Sparkles size={16} />
-                    <span>Stock CRM workspace</span>
-                  </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-3xl font-semibold leading-snug sm:text-4xl">
-                      Bring coverage-ready research to life
-                    </h2>
-                    <p className="mt-4 text-base text-white/80">
-                      Keep your most important names organized, research-ready, and a click away.
-                      You have {memosDue} {memosDue === 1 ? 'name' : 'names'} due for memo refresh—dive
-                      back in before the next catalyst.
+                    <div className="inline-flex items-center space-x-2 text-sm font-medium text-blue-600">
+                      <Sparkles size={16} />
+                      <span>Stock CRM workspace</span>
+                    </div>
+                    <h2 className="mt-3 text-2xl font-semibold text-gray-900">Coverage snapshot</h2>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Keep your most important names organized and memo-ready. You have {memosDue}{' '}
+                      {memosDue === 1 ? 'name' : 'names'} due for a refresh.
                     </p>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-xl border border-white/10 bg-white/10 p-4">
-                      <div className="flex items-center space-x-2 text-sm text-white/80">
-                        <Layers size={16} />
-                        <span>Names in coverage</span>
-                      </div>
-                      <div className="mt-2 text-3xl font-semibold">{coverageCount}</div>
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                    {memosDue} due
+                  </span>
+                </div>
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center text-sm text-gray-500">
+                      <Layers size={16} className="mr-2 text-blue-500" />
+                      Names in coverage
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/10 p-4">
-                      <div className="flex items-center space-x-2 text-sm text-white/80">
-                        <Compass size={16} />
-                        <span>Sectors</span>
-                      </div>
-                      <div className="mt-2 text-3xl font-semibold">{uniqueSectors.length}</div>
+                    <div className="mt-2 text-3xl font-semibold text-gray-900">{coverageCount}</div>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center text-sm text-gray-500">
+                      <Compass size={16} className="mr-2 text-blue-500" />
+                      Sectors
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/10 p-4">
-                      <div className="flex items-center space-x-2 text-sm text-white/80">
-                        <CalendarDays size={16} />
-                        <span>Fresh models</span>
-                      </div>
-                      <div className="mt-2 text-3xl font-semibold">{freshModels}</div>
+                    <div className="mt-2 text-3xl font-semibold text-gray-900">{uniqueSectors.length}</div>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center text-sm text-gray-500">
+                      <CalendarDays size={16} className="mr-2 text-blue-500" />
+                      Memos due
                     </div>
+                    <div className="mt-2 text-3xl font-semibold text-gray-900">{memosDue}</div>
                   </div>
                 </div>
-                <div className="rounded-2xl border border-white/20 bg-white/15 p-6 backdrop-blur">
-                  <p className="text-sm uppercase tracking-wide text-white/70">Jump to a workspace</p>
-                  <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-                    <input
-                      type="text"
-                      placeholder="Enter ticker (e.g., AAPL)"
-                      value={stockSearchTicker}
-                      onChange={(e) => setStockSearchTicker(e.target.value.toUpperCase())}
-                      className="flex-1 rounded-xl border border-white/30 bg-white/90 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleStockSearch();
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={handleStockSearch}
-                      className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-900 shadow-lg shadow-slate-900/10 hover:bg-slate-50"
-                    >
-                      Launch
-                    </button>
-                  </div>
-                  {quickPicks.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-xs uppercase tracking-wide text-white/70">In coverage</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {quickPicks.map((company) => (
-                          <button
-                            key={company.id}
-                            onClick={() => setCurrentView(`stock-crm-${company.ticker.toUpperCase()}`)}
-                            className="rounded-full border border-white/20 bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
-                          >
-                            {company.ticker.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <button
-                    onClick={async () => {
-                      const { stockServices } = await import('./stockServices');
-                      const status = await stockServices.checkAPIStatus();
-                      console.log('API Status:', status);
-                      alert(status.success ? 'API is working!' : `API Error: ${status.error}`);
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-gray-700">Jump to a workspace</p>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="text"
+                    placeholder="Enter ticker (e.g., AAPL)"
+                    value={stockSearchTicker}
+                    onChange={(e) => setStockSearchTicker(e.target.value.toUpperCase())}
+                    className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleStockSearch();
+                      }
                     }}
-                    className="mt-6 inline-flex items-center text-sm font-medium text-white/80 transition hover:text-white"
+                  />
+                  <button
+                    onClick={handleStockSearch}
+                    className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
                   >
-                    Test API Status
-                    <ArrowRight size={16} className="ml-2" />
+                    Launch
                   </button>
                 </div>
+                {quickPicks.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">In coverage</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {quickPicks.map((company) => (
+                        <button
+                          key={company.id}
+                          onClick={() => setCurrentView(`stock-crm-${company.ticker.toUpperCase()}`)}
+                          className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                        >
+                          {company.ticker.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={async () => {
+                    const { stockServices } = await import('./stockServices');
+                    const status = await stockServices.checkAPIStatus();
+                    console.log('API Status:', status);
+                    alert(status.success ? 'API is working!' : `API Error: ${status.error}`);
+                  }}
+                  className="mt-6 inline-flex items-center text-sm font-medium text-blue-600 transition hover:text-blue-700"
+                >
+                  Test API Status
+                  <ArrowRight size={16} className="ml-2" />
+                </button>
               </div>
             </div>
 
@@ -2194,41 +2191,13 @@ const AnalystOS = () => {
                           CRM ready
                         </span>
                       </div>
-                      <div className="mt-4 space-y-2 text-sm text-gray-600">
-                        <div className="flex items-center justify-between">
-                          <span>Last model</span>
-                          <span className="font-medium text-gray-900">
-                            {formatDaysAgoLabel(company.lastModelDate)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Last memo</span>
-                          <span className="font-medium text-gray-900">
-                            {formatDaysAgoLabel(company.lastMemoDate)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex gap-2">
-                        <button
-                          onClick={() =>
-                            company.ticker &&
-                            setCurrentView(`stock-crm-${company.ticker.toUpperCase()}`)
-                          }
-                          disabled={!company.ticker}
-                          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium text-white transition ${
-                            company.ticker
-                              ? 'bg-blue-600 hover:bg-blue-700'
-                              : 'cursor-not-allowed bg-gray-300'
-                          }`}
-                        >
-                          Open CRM
-                        </button>
+                      <div className="mt-4">
                         <button
                           onClick={() => {
                             setCoverageSearch(company.company);
                             setCurrentView('coverage');
                           }}
-                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                         >
                           View Profile
                         </button>
