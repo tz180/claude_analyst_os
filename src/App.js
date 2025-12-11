@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, ArrowRight, Compass, Layers, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, ArrowRight, Compass, Layers, Sparkles, MessageSquare, RefreshCcw } from 'lucide-react';
 import './App.css';
 import { supabase } from './supabase';
 import { 
@@ -8,7 +8,8 @@ import {
   deliverablesServices, 
   pipelineServices, 
   analyticsServices,
-  portfolioServices
+  portfolioServices,
+  stockNotesServices
 } from './supabaseServices';
 import { stockServices } from './stockServices';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -49,6 +50,13 @@ const AnalystOS = () => {
   const [memos, setMemos] = useState([]);
   const [completedMemos, setCompletedMemos] = useState([]);
   const [pipelineIdeas, setPipelineIdeas] = useState([]);
+  const [crmNotes, setCrmNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState(null);
+  const [notesSort, setNotesSort] = useState({ column: 'created_at', direction: 'desc' });
+  const [notePrices, setNotePrices] = useState({});
+  const [notePricesLoading, setNotePricesLoading] = useState(false);
+  const [notePricesError, setNotePricesError] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [stockSearchTicker, setStockSearchTicker] = useState('');
@@ -169,9 +177,39 @@ const AnalystOS = () => {
     }
   };
 
+  const formatCurrency = (value) => {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      return '—';
+    }
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 2
+    }).format(numeric);
+  };
+
+  const formatPercent = (value, digits = 1) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+    const numeric = Number(value);
+    const rounded = numeric.toFixed(digits);
+    const sign = numeric > 0 ? '+' : '';
+    return `${sign}${rounded}%`;
+  };
+
+  const truncateText = (text, maxLength = 140) => {
+    if (!text) return '—';
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 1)}…`;
+  };
+
   const loadDataFromSupabase = useCallback(async () => {
     try {
       setLoading(true);
+      setNotesLoading(true);
+      setNotesError(null);
       console.log('Starting loadDataFromSupabase...');
       const [
         checkoutHistoryData,
@@ -180,7 +218,8 @@ const AnalystOS = () => {
         formerCoverageData,
         deliverablesData,
         pipelineIdeasData,
-        portfolioData
+        portfolioData,
+        stockNotesData
       ] = await Promise.allSettled([
         dailyCheckinServices.getCheckoutHistory(),
         dailyCheckinServices.getGoalsHistory(),
@@ -188,7 +227,8 @@ const AnalystOS = () => {
         coverageServices.getFormerCoverage(),
         deliverablesServices.getDeliverables(),
         pipelineServices.getPipelineIdeas(),
-        portfolioServices.getPortfolio()
+        portfolioServices.getPortfolio(),
+        stockNotesServices.getAllNotes()
       ]);
 
       console.log('Promise.allSettled results:', {
@@ -196,7 +236,8 @@ const AnalystOS = () => {
         activeCoverageData,
         formerCoverageData,
         deliverablesData,
-        pipelineIdeasData
+        pipelineIdeasData,
+        stockNotesData
       });
 
       // Handle results safely with detailed logging
@@ -207,6 +248,7 @@ const AnalystOS = () => {
       const deliverablesResult = deliverablesData.status === 'fulfilled' ? deliverablesData.value : [];
       const pipelineIdeasResult = pipelineIdeasData.status === 'fulfilled' ? pipelineIdeasData.value : [];
       const portfolioResult = portfolioData.status === 'fulfilled' ? portfolioData.value : null;
+      const stockNotesResult = stockNotesData.status === 'fulfilled' ? stockNotesData.value : [];
 
       // Simple logging for debugging
       if (checkoutHistoryData.status === 'rejected') {
@@ -228,6 +270,11 @@ const AnalystOS = () => {
       setMemos(deliverablesResult.filter(d => d.stage !== 'completed'));
       setCompletedMemos(deliverablesResult.filter(d => d.stage === 'completed'));
       setPipelineIdeas(pipelineIdeasResult);
+      setCrmNotes(stockNotesResult);
+      if (stockNotesData.status === 'rejected') {
+        console.error('Stock notes failed:', stockNotesData.reason);
+        setNotesError('Failed to load research notes.');
+      }
       
       // Handle portfolio data - only create if we don't have one
       if (portfolioResult) {
@@ -280,6 +327,7 @@ const AnalystOS = () => {
       console.error('Error loading data:', error);
       addNotification('Failed to load data: ' + error.message, 'error');
     } finally {
+      setNotesLoading(false);
       setLoading(false);
     }
   }, [user]);
@@ -294,12 +342,99 @@ const AnalystOS = () => {
     }
   };
 
+  const refreshStockNotes = useCallback(async () => {
+    try {
+      setNotesLoading(true);
+      setNotesError(null);
+      const notes = await stockNotesServices.getAllNotes();
+      setCrmNotes(notes);
+    } catch (error) {
+      console.error('Error refreshing stock notes:', error);
+      setNotesError('Unable to refresh notes. Please try again.');
+    } finally {
+      setNotesLoading(false);
+    }
+  }, []);
+
   // Load data from Supabase on component mount
   useEffect(() => {
     if (user) {
       loadDataFromSupabase();
     }
   }, [user, loadDataFromSupabase]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchNotePrices = async () => {
+      if (!crmNotes || crmNotes.length === 0) {
+        setNotePrices({});
+        setNotePricesError(null);
+        setNotePricesLoading(false);
+        return;
+      }
+
+      const uniqueTickers = Array.from(
+        new Set(
+          crmNotes
+            .map((note) => note.ticker?.toUpperCase())
+            .filter(Boolean)
+        )
+      );
+
+      if (uniqueTickers.length === 0) {
+        setNotePrices({});
+        setNotePricesError(null);
+        setNotePricesLoading(false);
+        return;
+      }
+
+      setNotePricesLoading(true);
+      setNotePricesError(null);
+
+      const priceMap = {};
+      let encounteredError = null;
+
+      for (let i = 0; i < uniqueTickers.length; i += 1) {
+        const ticker = uniqueTickers[i];
+
+        try {
+          const quoteResult = await stockServices.getStockQuote(ticker);
+          if (quoteResult.success && quoteResult.data?.price) {
+            priceMap[ticker] = quoteResult.data.price;
+          } else if (!encounteredError) {
+            encounteredError = quoteResult.error || `Price unavailable for ${ticker}`;
+          }
+        } catch (error) {
+          if (!encounteredError) {
+            encounteredError = error.message;
+          }
+        }
+
+        if (i < uniqueTickers.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+
+        if (cancelled) {
+          return;
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      setNotePrices(priceMap);
+      setNotePricesLoading(false);
+      setNotePricesError(encounteredError);
+    };
+
+    fetchNotePrices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [crmNotes]);
 
   // ✅ SIMPLE onChange handlers - no useCallback to avoid complexity
   const handleDailyGoalsChange = (e) => {
@@ -870,6 +1005,124 @@ const AnalystOS = () => {
           </div>
         </div>
       </div>
+    );
+  };
+
+  const coverageByTicker = useMemo(() => {
+    return coverage.reduce((acc, company) => {
+      const ticker = company.ticker?.toUpperCase();
+      if (ticker) {
+        acc[ticker] = company;
+      }
+      return acc;
+    }, {});
+  }, [coverage]);
+
+  const annotatedNotes = useMemo(() => {
+    if (!Array.isArray(crmNotes)) {
+      return [];
+    }
+
+    return crmNotes.map((note) => {
+      const ticker = note.ticker?.toUpperCase() || '—';
+      const coverageInfo = coverageByTicker[ticker] || null;
+      const companyName = coverageInfo?.company || note.title || ticker;
+      const industry = coverageInfo?.industry || coverageInfo?.sector || '—';
+
+      const rawEntryPrice = note.price_when_written;
+      const entryPrice =
+        rawEntryPrice === null || rawEntryPrice === undefined
+          ? null
+          : Number(rawEntryPrice);
+      const entryPriceValid = Number.isFinite(entryPrice) && entryPrice !== 0;
+
+      const latestPrice =
+        ticker && notePrices[ticker] !== undefined ? Number(notePrices[ticker]) : null;
+      const latestPriceValid = Number.isFinite(latestPrice);
+
+      let returnAbs = null;
+      let returnPct = null;
+
+      if (entryPriceValid && latestPriceValid) {
+        returnAbs = latestPrice - entryPrice;
+        returnPct = (returnAbs / entryPrice) * 100;
+      }
+
+      return {
+        ...note,
+        displayTicker: ticker,
+        companyName,
+        industry,
+        entryPrice,
+        returnAbs,
+        returnPct
+      };
+    });
+  }, [crmNotes, coverageByTicker, notePrices]);
+
+  const sortedCrmNotes = useMemo(() => {
+    const notes = [...annotatedNotes];
+    const multiplier = notesSort.direction === 'asc' ? 1 : -1;
+
+    const getSortValue = (note, column) => {
+      switch (column) {
+        case 'ticker':
+          return note.displayTicker || '';
+        case 'name':
+          return note.companyName || '';
+        case 'industry':
+          return note.industry || '';
+        case 'note':
+          return note.title || '';
+        case 'return':
+          return note.returnPct;
+        case 'created_at':
+        default:
+          return note.created_at ? new Date(note.created_at).getTime() : null;
+      }
+    };
+
+    notes.sort((a, b) => {
+      const valA = getSortValue(a, notesSort.column);
+      const valB = getSortValue(b, notesSort.column);
+
+      if (valA == null && valB == null) return 0;
+      if (valA == null) return 1;
+      if (valB == null) return -1;
+
+      let comparison = 0;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        comparison = valA - valB;
+      } else {
+        comparison = valA
+          .toString()
+          .localeCompare(valB.toString(), undefined, { sensitivity: 'base' });
+      }
+
+      return comparison * multiplier;
+    });
+
+    return notes;
+  }, [annotatedNotes, notesSort]);
+
+  const handleNotesSort = (column) => {
+    setNotesSort((prev) => {
+      if (prev.column === column) {
+        return { column, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDirection = column === 'return' || column === 'created_at' ? 'desc' : 'asc';
+      return { column, direction: defaultDirection };
+    });
+  };
+
+  const renderSortIndicator = (column) => {
+    if (notesSort.column !== column) {
+      return <span className="text-gray-300 text-xs">↕</span>;
+    }
+    return (
+      <span className="text-blue-600 text-xs">
+        {notesSort.direction === 'asc' ? '↑' : '↓'}
+      </span>
     );
   };
 
@@ -2145,8 +2398,12 @@ const AnalystOS = () => {
                       <div className="mt-4">
                         <button
                           onClick={() => {
-                            setCoverageSearch(company.company);
-                            setCurrentView('coverage');
+                            if (company.ticker) {
+                              setCurrentView(`stock-crm-${company.ticker.toUpperCase()}`);
+                            } else {
+                              setCoverageSearch(company.company);
+                              setCurrentView('coverage');
+                            }
                           }}
                           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                         >
@@ -2178,6 +2435,164 @@ const AnalystOS = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="rounded-2xl border bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-3 border-b pb-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-blue-600">
+                    <MessageSquare size={18} />
+                    Research notes
+                  </div>
+                  <h3 className="mt-1 text-xl font-semibold text-gray-900">All CRM notes</h3>
+                  <p className="text-sm text-gray-600">
+                    Scroll through every note, sort by column, and jump back into a workspace when you spot an update you owe yourself.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {notePricesLoading && (
+                    <span className="text-xs text-gray-500">Updating returns…</span>
+                  )}
+                  <button
+                    onClick={refreshStockNotes}
+                    disabled={notesLoading}
+                    className="inline-flex items-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCcw
+                      size={16}
+                      className={`mr-2 ${notesLoading ? 'animate-spin' : ''}`}
+                    />
+                    {notesLoading ? 'Refreshing' : 'Refresh list'}
+                  </button>
+                </div>
+              </div>
+              {notesError && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {notesError}
+                </div>
+              )}
+              {!notesError && notePricesError && (
+                <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-700">
+                  Return data may be incomplete: {notePricesError}
+                </div>
+              )}
+              <div className="mt-4">
+                {notesLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500" />
+                  </div>
+                ) : crmNotes.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 py-12 text-center text-gray-500">
+                    <MessageSquare size={36} className="text-gray-300" />
+                    <p className="text-base font-medium text-gray-900">No notes yet</p>
+                    <p className="text-sm">
+                      Open any company workspace to add your first research note.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-[28rem] overflow-auto">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-white">
+                        <tr className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          <th className="px-4 py-2">
+                            <button
+                              type="button"
+                              onClick={() => handleNotesSort('ticker')}
+                              className="flex items-center gap-1"
+                            >
+                              Ticker {renderSortIndicator('ticker')}
+                            </button>
+                          </th>
+                          <th className="px-4 py-2">
+                            <button
+                              type="button"
+                              onClick={() => handleNotesSort('name')}
+                              className="flex items-center gap-1"
+                            >
+                              Name {renderSortIndicator('name')}
+                            </button>
+                          </th>
+                          <th className="px-4 py-2">
+                            <button
+                              type="button"
+                              onClick={() => handleNotesSort('industry')}
+                              className="flex items-center gap-1"
+                            >
+                              Industry {renderSortIndicator('industry')}
+                            </button>
+                          </th>
+                          <th className="px-4 py-2">
+                            <button
+                              type="button"
+                              onClick={() => handleNotesSort('note')}
+                              className="flex items-center gap-1"
+                            >
+                              Note {renderSortIndicator('note')}
+                            </button>
+                          </th>
+                          <th className="px-4 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleNotesSort('return')}
+                              className="flex w-full items-center justify-end gap-1"
+                            >
+                              Return since note {renderSortIndicator('return')}
+                            </button>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedCrmNotes.map((note) => (
+                          <tr key={note.id} className="border-b last:border-b-0">
+                            <td className="whitespace-nowrap px-4 py-3 font-semibold text-gray-900">
+                              {note.displayTicker || '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-gray-900">{note.companyName}</div>
+                              <div className="text-xs text-gray-500">
+                                {note.created_at
+                                  ? new Date(note.created_at).toLocaleDateString()
+                                  : 'Date unavailable'}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">{note.industry}</td>
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-gray-900">{note.title}</div>
+                              <p className="mt-1 text-sm text-gray-600">
+                                {truncateText(note.content, 160)}
+                              </p>
+                              <p className="mt-1 text-xs text-gray-500">
+                                Entry price:{' '}
+                                {note.entryPrice !== null ? formatCurrency(note.entryPrice) : '—'}
+                              </p>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
+                              {note.returnPct !== null ? (
+                                <span
+                                  className={
+                                    note.returnPct > 0
+                                      ? 'text-green-600'
+                                      : note.returnPct < 0
+                                      ? 'text-red-600'
+                                      : 'text-gray-700'
+                                  }
+                                >
+                                  {formatPercent(note.returnPct, 1)}
+                                  <span className="ml-1 text-xs text-gray-500">
+                                    ({formatCurrency(note.returnAbs)})
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400">Price unavailable</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
