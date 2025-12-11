@@ -1226,6 +1226,25 @@ export const stockNotesServices = {
     return data || [];
   },
 
+  // Get all notes for the current user
+  async getAllNotes() {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('stock_notes')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching stock notes:', error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
   // Add a new note
   async addNote(noteData) {
     console.log('stockNotesServices.addNote called with:', noteData);
