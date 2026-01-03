@@ -1664,14 +1664,24 @@ export const stockQuoteCacheServices = {
   // During market hours: 15 minutes, After hours: 60 minutes
   getCacheTTL() {
     const now = new Date();
-    // Get NY time components
-    const nyTimeStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const nyDate = new Date(nyTimeStr);
-    const nyHour = nyDate.getHours();
-    const dayOfWeek = nyDate.getDay(); // 0 = Sunday, 6 = Saturday
 
-    // Weekend: use longer cache
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
+    // Use Intl.DateTimeFormat to reliably get NY timezone components
+    const nyFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      hour: 'numeric',
+      hour12: false
+    });
+
+    const parts = nyFormatter.formatToParts(now);
+    const weekdayPart = parts.find(p => p.type === 'weekday');
+    const hourPart = parts.find(p => p.type === 'hour');
+
+    const weekday = weekdayPart ? weekdayPart.value : '';
+    const nyHour = hourPart ? parseInt(hourPart.value, 10) : 12;
+
+    // Weekend check using weekday name (locale-independent)
+    if (weekday === 'Sat' || weekday === 'Sun') {
       return 120; // 2 hours on weekends
     }
 
