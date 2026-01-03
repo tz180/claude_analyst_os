@@ -50,6 +50,13 @@ CREATE POLICY "Allow authenticated users to update stock quotes cache"
     USING (true)
     WITH CHECK (true);
 
+-- Create policy to allow authenticated users to delete stale cache entries
+CREATE POLICY "Allow authenticated users to delete stock quotes cache"
+    ON stock_quotes_cache
+    FOR DELETE
+    TO authenticated
+    USING (true);
+
 -- Function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_stock_quotes_cache_updated_at()
 RETURNS TRIGGER AS $$

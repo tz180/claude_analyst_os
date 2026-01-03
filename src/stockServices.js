@@ -273,7 +273,7 @@ export const stockServices = {
               symbol: cachedQuote.ticker,
               price: cachedQuote.price,
               change: cachedQuote.change,
-              changePercent: cachedQuote.changePercent ? `${cachedQuote.changePercent}%` : '0%',
+              changePercent: `${cachedQuote.changePercent.toFixed(4)}%`,
               volume: cachedQuote.volume,
               previousClose: cachedQuote.previousClose,
               open: cachedQuote.open,
