@@ -1658,6 +1658,238 @@ export const historicalPriceServices = {
   }
 };
 
+// Stock Quotes Cache Services - Cache for current stock prices to reduce API calls
+export const stockQuoteCacheServices = {
+  // Cache TTL in minutes - how long cached quotes are considered fresh
+  // During market hours: 15 minutes, After hours: 60 minutes
+  getCacheTTL() {
+    const now = new Date();
+    const nyHour = parseInt(now.toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      hour: '2-digit',
+      hour12: false
+    }));
+    const dayOfWeek = parseInt(now.toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'numeric'
+    }));
+
+    // Weekend: use longer cache
+    if (dayOfWeek === 1 || dayOfWeek === 7) { // Sunday = 1, Saturday = 7
+      return 120; // 2 hours on weekends
+    }
+
+    // Market hours: 9:30 AM - 4:00 PM ET (using 9-16 as approximation)
+    if (nyHour >= 9 && nyHour < 16) {
+      return 15; // 15 minutes during market hours
+    }
+
+    // After hours
+    return 60; // 1 hour after market hours
+  },
+
+  // Get cached quote for a single ticker
+  async getCachedQuote(ticker) {
+    try {
+      const { data, error } = await supabase
+        .from('stock_quotes_cache')
+        .select('*')
+        .eq('ticker', ticker.toUpperCase())
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No rows returned - cache miss
+          return null;
+        }
+        console.error(`Error fetching cached quote for ${ticker}:`, error);
+        return null;
+      }
+
+      // Check if cache is still fresh
+      if (data && data.fetched_at) {
+        const fetchedAt = new Date(data.fetched_at);
+        const now = new Date();
+        const ageMinutes = (now - fetchedAt) / (1000 * 60);
+        const ttl = this.getCacheTTL();
+
+        if (ageMinutes <= ttl) {
+          // Cache is fresh
+          return {
+            ticker: data.ticker,
+            price: parseFloat(data.price),
+            change: data.change ? parseFloat(data.change) : 0,
+            changePercent: data.change_percent ? parseFloat(data.change_percent) : 0,
+            volume: data.volume,
+            previousClose: data.previous_close ? parseFloat(data.previous_close) : null,
+            open: data.open_price ? parseFloat(data.open_price) : null,
+            high: data.high_price ? parseFloat(data.high_price) : null,
+            low: data.low_price ? parseFloat(data.low_price) : null,
+            lastTradingDay: data.last_trading_day,
+            fetchedAt: data.fetched_at,
+            fromCache: true
+          };
+        }
+      }
+
+      // Cache is stale
+      return null;
+    } catch (error) {
+      console.error(`Error in getCachedQuote for ${ticker}:`, error);
+      return null;
+    }
+  },
+
+  // Get cached quotes for multiple tickers at once
+  async getCachedQuotes(tickers) {
+    try {
+      if (!tickers || tickers.length === 0) {
+        return {};
+      }
+
+      const upperTickers = tickers.map(t => t.toUpperCase());
+
+      const { data, error } = await supabase
+        .from('stock_quotes_cache')
+        .select('*')
+        .in('ticker', upperTickers);
+
+      if (error) {
+        console.error('Error fetching cached quotes:', error);
+        return {};
+      }
+
+      const ttl = this.getCacheTTL();
+      const now = new Date();
+      const result = {};
+
+      (data || []).forEach(row => {
+        const fetchedAt = new Date(row.fetched_at);
+        const ageMinutes = (now - fetchedAt) / (1000 * 60);
+
+        if (ageMinutes <= ttl) {
+          result[row.ticker] = {
+            ticker: row.ticker,
+            price: parseFloat(row.price),
+            change: row.change ? parseFloat(row.change) : 0,
+            changePercent: row.change_percent ? parseFloat(row.change_percent) : 0,
+            volume: row.volume,
+            previousClose: row.previous_close ? parseFloat(row.previous_close) : null,
+            open: row.open_price ? parseFloat(row.open_price) : null,
+            high: row.high_price ? parseFloat(row.high_price) : null,
+            low: row.low_price ? parseFloat(row.low_price) : null,
+            lastTradingDay: row.last_trading_day,
+            fetchedAt: row.fetched_at,
+            fromCache: true
+          };
+        }
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Error in getCachedQuotes:', error);
+      return {};
+    }
+  },
+
+  // Store a quote in the cache
+  async cacheQuote(quoteData) {
+    try {
+      if (!quoteData || !quoteData.ticker || quoteData.price === undefined) {
+        return { success: false, error: 'Invalid quote data' };
+      }
+
+      const record = {
+        ticker: quoteData.ticker.toUpperCase(),
+        price: quoteData.price,
+        change: quoteData.change || null,
+        change_percent: quoteData.changePercent || null,
+        volume: quoteData.volume || null,
+        previous_close: quoteData.previousClose || null,
+        open_price: quoteData.open || null,
+        high_price: quoteData.high || null,
+        low_price: quoteData.low || null,
+        last_trading_day: quoteData.lastTradingDay || null,
+        fetched_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('stock_quotes_cache')
+        .upsert(record, { onConflict: 'ticker' });
+
+      if (error) {
+        console.error(`Error caching quote for ${quoteData.ticker}:`, error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in cacheQuote:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Store multiple quotes in the cache
+  async cacheQuotes(quotes) {
+    try {
+      if (!quotes || quotes.length === 0) {
+        return { success: true };
+      }
+
+      const records = quotes.map(q => ({
+        ticker: q.ticker.toUpperCase(),
+        price: q.price,
+        change: q.change || null,
+        change_percent: q.changePercent || null,
+        volume: q.volume || null,
+        previous_close: q.previousClose || null,
+        open_price: q.open || null,
+        high_price: q.high || null,
+        low_price: q.low || null,
+        last_trading_day: q.lastTradingDay || null,
+        fetched_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from('stock_quotes_cache')
+        .upsert(records, { onConflict: 'ticker' });
+
+      if (error) {
+        console.error('Error caching quotes:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in cacheQuotes:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Clear stale cache entries (older than 24 hours)
+  async clearStaleCache() {
+    try {
+      const staleDate = new Date();
+      staleDate.setHours(staleDate.getHours() - 24);
+
+      const { error } = await supabase
+        .from('stock_quotes_cache')
+        .delete()
+        .lt('fetched_at', staleDate.toISOString());
+
+      if (error) {
+        console.error('Error clearing stale cache:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in clearStaleCache:', error);
+      return { success: false, error: error.message };
+    }
+  }
+};
+
 // Historical Portfolio Values Services
 export const historicalPortfolioValueServices = {
   // Calculate and store historical portfolio values for a portfolio

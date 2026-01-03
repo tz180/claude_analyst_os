@@ -21,46 +21,51 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [calculatingHistorical, setCalculatingHistorical] = useState(false);
   const [historicalCalculationStatus, setHistoricalCalculationStatus] = useState(null);
 
-  // Load current prices for all positions
+  // Load current prices for all positions using batch fetching with caching
   useEffect(() => {
     const loadPrices = async () => {
       if (positions.length === 0) return;
-      
+
       setPricesLoading(true);
       try {
-        const pricePromises = positions.map(async (position) => {
-          try {
-            const priceData = await stockServices.getStockPrice(position.ticker);
-            
-            // If no price data, use the average price as fallback
-            const fallbackPrice = priceData?.price || position.average_price;
-            const fallbackChange = priceData?.change || 0;
-            const fallbackChangePercent = priceData?.changePercent || 0;
-            
-            return { 
-              ticker: position.ticker, 
-              price: fallbackPrice,
-              change: fallbackChange,
-              changePercent: fallbackChangePercent
+        // Get all tickers from positions
+        const tickers = positions.map(p => p.ticker);
+        console.log(`🔄 Loading prices for ${tickers.length} positions...`);
+
+        // Use batch fetching with caching (much more efficient)
+        const batchPrices = await stockServices.getBatchStockPrices(tickers);
+
+        const priceMap = {};
+        const changeMap = {};
+
+        positions.forEach((position) => {
+          const ticker = position.ticker.toUpperCase();
+          const priceData = batchPrices[ticker];
+
+          if (priceData && priceData.price) {
+            priceMap[position.ticker] = priceData.price;
+            changeMap[position.ticker] = {
+              change: priceData.change || 0,
+              changePercent: priceData.changePercent || 0
             };
-          } catch (error) {
-            console.error(`Error loading price for ${position.ticker}:`, error);
-            // Use average price as fallback
-            return { 
-              ticker: position.ticker, 
-              price: position.average_price, 
-              change: 0, 
-              changePercent: 0 
-            };
+          } else {
+            // Fallback to average price if no data available
+            priceMap[position.ticker] = position.average_price;
+            changeMap[position.ticker] = { change: 0, changePercent: 0 };
           }
         });
 
-        const prices = await Promise.all(pricePromises);
+        setCurrentPrices(priceMap);
+        setPriceChanges(changeMap);
+        console.log(`✅ Loaded prices for ${Object.keys(priceMap).length} positions`);
+      } catch (error) {
+        console.error('Error loading prices:', error);
+        // Set fallback prices on error
         const priceMap = {};
         const changeMap = {};
-        prices.forEach(({ ticker, price, change, changePercent }) => {
-          priceMap[ticker] = price;
-          changeMap[ticker] = { change, changePercent };
+        positions.forEach((position) => {
+          priceMap[position.ticker] = position.average_price;
+          changeMap[position.ticker] = { change: 0, changePercent: 0 };
         });
         setCurrentPrices(priceMap);
         setPriceChanges(changeMap);
