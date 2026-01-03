@@ -1799,8 +1799,8 @@ export const stockQuoteCacheServices = {
   // Store a quote in the cache
   async cacheQuote(quoteData) {
     try {
-      if (!quoteData || !quoteData.ticker || quoteData.price === undefined) {
-        return { success: false, error: 'Invalid quote data' };
+      if (!quoteData || !quoteData.ticker || !Number.isFinite(quoteData.price)) {
+        return { success: false, error: 'Invalid quote data: missing ticker or invalid price' };
       }
 
       const record = {
@@ -1840,7 +1840,19 @@ export const stockQuoteCacheServices = {
         return { success: true };
       }
 
-      const records = quotes.map(q => ({
+      // Filter out quotes with invalid prices to prevent batch insert failure
+      const validQuotes = quotes.filter(q => q && q.ticker && Number.isFinite(q.price));
+
+      if (validQuotes.length === 0) {
+        console.warn('No valid quotes to cache after filtering');
+        return { success: true };
+      }
+
+      if (validQuotes.length < quotes.length) {
+        console.warn(`Filtered out ${quotes.length - validQuotes.length} invalid quotes before caching`);
+      }
+
+      const records = validQuotes.map(q => ({
         ticker: q.ticker.toUpperCase(),
         price: q.price,
         change: this._toNullable(q.change),

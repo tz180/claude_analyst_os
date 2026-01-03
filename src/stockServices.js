@@ -549,14 +549,21 @@ export const stockServices = {
             const quote = data['Global Quote'];
             if (quote && Object.keys(quote).length > 0) {
               const price = parseFloat(quote['05. price']);
+
+              // Skip quotes with invalid prices
+              if (!Number.isFinite(price)) {
+                console.warn(`⚠️ Invalid price for ${symbol}, skipping`);
+                continue;
+              }
+
               const change = parseFloat(quote['09. change']);
               const changePercent = quote['10. change percent'];
               const parsedChangePercent = changePercent ? parseFloat(changePercent.replace('%', '')) : 0;
 
               results[symbol] = {
                 price: price,
-                change: change,
-                changePercent: parsedChangePercent
+                change: Number.isFinite(change) ? change : 0,
+                changePercent: Number.isFinite(parsedChangePercent) ? parsedChangePercent : 0
               };
 
               // Collect for batch cache update
