@@ -322,6 +322,28 @@ export const stockServices = {
       if (!quote || Object.keys(quote).length === 0) {
         console.log('No GLOBAL_QUOTE data, falling back to daily series...');
         const fallbackResult = await fetchDailyQuoteFallback(upperSymbol);
+
+        // Cache the fallback result if successful
+        if (fallbackResult.success && fallbackResult.data) {
+          const fbData = fallbackResult.data;
+          const fbChangePercent = typeof fbData.changePercent === 'string'
+            ? parseFloat(fbData.changePercent.replace('%', ''))
+            : fbData.changePercent || 0;
+
+          await stockQuoteCacheServices.cacheQuote({
+            ticker: upperSymbol,
+            price: fbData.price,
+            change: fbData.change || 0,
+            changePercent: fbChangePercent,
+            volume: fbData.volume || null,
+            previousClose: fbData.previousClose || null,
+            open: fbData.open || null,
+            high: fbData.high || null,
+            low: fbData.low || null,
+            lastTradingDay: fbData.lastUpdated || null
+          });
+        }
+
         return fallbackResult;
       }
 
@@ -513,6 +535,13 @@ export const stockServices = {
 
             if (data['Note']) {
               console.warn('⚠️ Rate limit warning:', data['Note']);
+              // If we hit rate limit, stop making more requests
+              break;
+            }
+
+            // Check for Alpha Vantage information message (another form of rate limit)
+            if (data['Information'] && data['Information'].includes('API')) {
+              console.warn('⚠️ Rate limit warning (Information):', data['Information']);
               // If we hit rate limit, stop making more requests
               break;
             }
