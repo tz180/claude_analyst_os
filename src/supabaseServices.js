@@ -1788,6 +1788,14 @@ export const stockQuoteCacheServices = {
     }
   },
 
+  // Helper to convert value to null only if truly missing (not zero)
+  _toNullable(value) {
+    if (value === undefined || value === null || (typeof value === 'number' && !Number.isFinite(value))) {
+      return null;
+    }
+    return value;
+  },
+
   // Store a quote in the cache
   async cacheQuote(quoteData) {
     try {
@@ -1798,13 +1806,13 @@ export const stockQuoteCacheServices = {
       const record = {
         ticker: quoteData.ticker.toUpperCase(),
         price: quoteData.price,
-        change: quoteData.change || null,
-        change_percent: quoteData.changePercent || null,
-        volume: quoteData.volume || null,
-        previous_close: quoteData.previousClose || null,
-        open_price: quoteData.open || null,
-        high_price: quoteData.high || null,
-        low_price: quoteData.low || null,
+        change: this._toNullable(quoteData.change),
+        change_percent: this._toNullable(quoteData.changePercent),
+        volume: this._toNullable(quoteData.volume),
+        previous_close: this._toNullable(quoteData.previousClose),
+        open_price: this._toNullable(quoteData.open),
+        high_price: this._toNullable(quoteData.high),
+        low_price: this._toNullable(quoteData.low),
         last_trading_day: quoteData.lastTradingDay || null,
         fetched_at: new Date().toISOString()
       };
@@ -1835,13 +1843,13 @@ export const stockQuoteCacheServices = {
       const records = quotes.map(q => ({
         ticker: q.ticker.toUpperCase(),
         price: q.price,
-        change: q.change || null,
-        change_percent: q.changePercent || null,
-        volume: q.volume || null,
-        previous_close: q.previousClose || null,
-        open_price: q.open || null,
-        high_price: q.high || null,
-        low_price: q.low || null,
+        change: this._toNullable(q.change),
+        change_percent: this._toNullable(q.changePercent),
+        volume: this._toNullable(q.volume),
+        previous_close: this._toNullable(q.previousClose),
+        open_price: this._toNullable(q.open),
+        high_price: this._toNullable(q.high),
+        low_price: this._toNullable(q.low),
         last_trading_day: q.lastTradingDay || null,
         fetched_at: new Date().toISOString()
       }));

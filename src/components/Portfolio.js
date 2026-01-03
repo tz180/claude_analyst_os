@@ -42,11 +42,11 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
           const ticker = position.ticker.toUpperCase();
           const priceData = batchPrices[ticker];
 
-          if (priceData && priceData.price !== undefined && priceData.price !== null) {
+          if (priceData && priceData.price !== undefined && priceData.price !== null && Number.isFinite(priceData.price)) {
             priceMap[position.ticker] = priceData.price;
             changeMap[position.ticker] = {
-              change: priceData.change || 0,
-              changePercent: priceData.changePercent || 0
+              change: Number.isFinite(priceData.change) ? priceData.change : 0,
+              changePercent: Number.isFinite(priceData.changePercent) ? priceData.changePercent : 0
             };
           } else {
             // Fallback to average price if no data available
