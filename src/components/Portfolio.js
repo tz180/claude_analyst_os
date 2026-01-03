@@ -42,7 +42,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
           const ticker = position.ticker.toUpperCase();
           const priceData = batchPrices[ticker];
 
-          if (priceData && priceData.price) {
+          if (priceData && priceData.price !== undefined && priceData.price !== null) {
             priceMap[position.ticker] = priceData.price;
             changeMap[position.ticker] = {
               change: priceData.change || 0,
