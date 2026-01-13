@@ -1,6 +1,11 @@
 // Stock Services - Alpha Vantage API Integration
+import { stockQuoteCacheServices } from './supabaseServices';
+
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
+
+// Rate limiting configuration
+const RATE_LIMIT_DELAY = 250; // 250ms between requests (4 requests/second to be safe)
 
 // Helper to normalize numeric values coming from Alpha Vantage
 const parseNullableNumber = (value) => {
@@ -248,64 +253,126 @@ export const stockServices = {
   },
 
   // Get real-time stock quote
-  async getStockQuote(symbol) {
+  // Uses cache-first approach to reduce API calls
+  async getStockQuote(symbol, skipCache = false) {
     if (!ALPHA_VANTAGE_API_KEY) {
       return { success: false, error: 'Alpha Vantage API key not configured' };
     }
 
     try {
-      console.log(`Fetching stock quote for ${symbol}...`);
-      console.log('Using API key:', ALPHA_VANTAGE_API_KEY.substring(0, 8) + '...');
-      
+      const upperSymbol = symbol.toUpperCase();
+
+      // Check cache first (unless explicitly skipped)
+      if (!skipCache) {
+        const cachedQuote = await stockQuoteCacheServices.getCachedQuote(upperSymbol);
+        if (cachedQuote) {
+          console.log(`📦 Cache hit for ${upperSymbol} quote (age: ${Math.round((new Date() - new Date(cachedQuote.fetchedAt)) / 1000 / 60)} min)`);
+          return {
+            success: true,
+            data: {
+              symbol: cachedQuote.ticker,
+              price: cachedQuote.price,
+              change: cachedQuote.change,
+              changePercent: `${cachedQuote.changePercent.toFixed(4)}%`,
+              volume: cachedQuote.volume,
+              previousClose: cachedQuote.previousClose,
+              open: cachedQuote.open,
+              high: cachedQuote.high,
+              low: cachedQuote.low,
+              lastUpdated: cachedQuote.lastTradingDay,
+              fromCache: true
+            }
+          };
+        }
+      }
+
+      console.log(`🌐 Fetching stock quote for ${upperSymbol} from API...`);
+
       // Try GLOBAL_QUOTE first (more reliable for free tier)
-      console.log('Trying GLOBAL_QUOTE endpoint...');
       const quoteResponse = await fetch(
-        `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+        `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${upperSymbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!quoteResponse.ok) {
         throw new Error(`HTTP error! status: ${quoteResponse.status}`);
       }
-      
+
       const quoteData = await quoteResponse.json();
-      console.log('GLOBAL_QUOTE response:', quoteData);
-      console.log('GLOBAL_QUOTE response keys:', Object.keys(quoteData));
-      
+
       if (quoteData['Error Message']) {
         console.log('GLOBAL_QUOTE error:', quoteData['Error Message']);
         return { success: false, error: quoteData['Error Message'] };
       }
-      
+
       if (quoteData['Note']) {
         console.log('GLOBAL_QUOTE rate limit:', quoteData['Note']);
         return { success: false, error: `API rate limit exceeded: ${quoteData['Note']}` };
       }
-      
+
       // Check for Alpha Vantage information message (rate limit)
       if (quoteData['Information'] && quoteData['Information'].includes('API key')) {
         console.log('Alpha Vantage rate limit detected:', quoteData['Information']);
-        return { 
-          success: false, 
-          error: `Alpha Vantage free tier limit reached. Please wait a few minutes and try again, or upgrade to premium for unlimited access.` 
+        return {
+          success: false,
+          error: `Alpha Vantage free tier limit reached. Please wait a few minutes and try again, or upgrade to premium for unlimited access.`
         };
       }
-      
+
       const quote = quoteData['Global Quote'];
       if (!quote || Object.keys(quote).length === 0) {
         console.log('No GLOBAL_QUOTE data, falling back to daily series...');
-        const fallbackResult = await fetchDailyQuoteFallback(symbol);
+        const fallbackResult = await fetchDailyQuoteFallback(upperSymbol);
+
+        // Cache the fallback result if successful
+        if (fallbackResult.success && fallbackResult.data) {
+          const fbData = fallbackResult.data;
+          const fbChangePercent = typeof fbData.changePercent === 'string'
+            ? parseFloat(fbData.changePercent.replace('%', ''))
+            : fbData.changePercent || 0;
+
+          await stockQuoteCacheServices.cacheQuote({
+            ticker: upperSymbol,
+            price: fbData.price,
+            change: fbData.change || 0,
+            changePercent: fbChangePercent,
+            volume: fbData.volume || null,
+            previousClose: fbData.previousClose || null,
+            open: fbData.open || null,
+            high: fbData.high || null,
+            low: fbData.low || null,
+            lastTradingDay: fbData.lastUpdated || null
+          });
+        }
+
         return fallbackResult;
       }
-      
-      console.log('GLOBAL_QUOTE data found:', quote);
-      
+
+      const price = parseFloat(quote['05. price']);
+      const change = parseFloat(quote['09. change']);
+      const changePercent = quote['10. change percent'];
+      const parsedChangePercent = changePercent ? parseFloat(changePercent.replace('%', '')) : 0;
+
+      // Cache the result
+      await stockQuoteCacheServices.cacheQuote({
+        ticker: upperSymbol,
+        price: price,
+        change: change,
+        changePercent: parsedChangePercent,
+        volume: parseInt(quote['06. volume']) || null,
+        previousClose: parseFloat(quote['08. previous close']) || null,
+        open: parseFloat(quote['02. open']) || null,
+        high: parseFloat(quote['03. high']) || null,
+        low: parseFloat(quote['04. low']) || null,
+        lastTradingDay: quote['07. latest trading day'] || null
+      });
+
       return {
         success: true,
         data: {
           symbol: quote['01. symbol'],
-          price: parseFloat(quote['05. price']),
-          change: parseFloat(quote['09. change']),
-          changePercent: quote['10. change percent'],
+          price: price,
+          change: change,
+          changePercent: changePercent,
           volume: parseInt(quote['06. volume']),
           previousClose: parseFloat(quote['08. previous close']),
           open: parseFloat(quote['02. open']),
@@ -321,53 +388,216 @@ export const stockServices = {
   },
 
   // Get current stock price (simplified function for portfolio)
-  async getStockPrice(symbol) {
+  // Uses cache-first approach to reduce API calls
+  async getStockPrice(symbol, skipCache = false) {
     if (!ALPHA_VANTAGE_API_KEY) {
       return null;
     }
 
     try {
-      console.log(`Getting stock price for ${symbol}...`);
-      
+      const upperSymbol = symbol.toUpperCase();
+
+      // Check cache first (unless explicitly skipped)
+      if (!skipCache) {
+        const cachedQuote = await stockQuoteCacheServices.getCachedQuote(upperSymbol);
+        if (cachedQuote) {
+          console.log(`📦 Cache hit for ${upperSymbol} (age: ${Math.round((new Date() - new Date(cachedQuote.fetchedAt)) / 1000 / 60)} min)`);
+          return {
+            price: cachedQuote.price,
+            change: cachedQuote.change,
+            changePercent: cachedQuote.changePercent
+          };
+        }
+      }
+
+      console.log(`🌐 Fetching stock price from API for ${upperSymbol}...`);
+
       const response = await fetch(
-        `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+        `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${upperSymbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      console.log('getStockPrice response:', data);
-      
+
       if (data['Error Message']) {
         console.error('getStockPrice error:', data['Error Message']);
         return null;
       }
-      
+
       if (data['Note']) {
         console.error('getStockPrice rate limit:', data['Note']);
         return null;
       }
-      
+
       const quote = data['Global Quote'];
       if (!quote || Object.keys(quote).length === 0) {
-        console.error('No quote data found for:', symbol);
+        console.error('No quote data found for:', upperSymbol);
         return null;
       }
-      
+
       const price = parseFloat(quote['05. price']);
       const change = parseFloat(quote['09. change']);
       const changePercent = quote['10. change percent'];
-      
+      const parsedChangePercent = changePercent ? parseFloat(changePercent.replace('%', '')) : 0;
+
+      // Cache the result
+      await stockQuoteCacheServices.cacheQuote({
+        ticker: upperSymbol,
+        price: price,
+        change: change,
+        changePercent: parsedChangePercent,
+        volume: parseInt(quote['06. volume']) || null,
+        previousClose: parseFloat(quote['08. previous close']) || null,
+        open: parseFloat(quote['02. open']) || null,
+        high: parseFloat(quote['03. high']) || null,
+        low: parseFloat(quote['04. low']) || null,
+        lastTradingDay: quote['07. latest trading day'] || null
+      });
+
       return {
         price: price,
         change: change,
-        changePercent: changePercent ? parseFloat(changePercent.replace('%', '')) : 0
+        changePercent: parsedChangePercent
       };
     } catch (error) {
       console.error('Error getting stock price:', error);
       return null;
+    }
+  },
+
+  // Batch fetch stock prices with rate limiting and caching
+  // This is the preferred method for fetching multiple stock prices (e.g., portfolio positions)
+  async getBatchStockPrices(symbols) {
+    if (!symbols || symbols.length === 0) {
+      return {};
+    }
+
+    const upperSymbols = symbols.map(s => s.toUpperCase());
+    const results = {};
+
+    try {
+      // Step 1: Check cache for all symbols
+      console.log(`📦 Checking cache for ${upperSymbols.length} symbols...`);
+      const cachedQuotes = await stockQuoteCacheServices.getCachedQuotes(upperSymbols);
+
+      // Separate symbols into cached (fresh) and uncached
+      const uncachedSymbols = [];
+
+      upperSymbols.forEach(symbol => {
+        if (cachedQuotes[symbol]) {
+          results[symbol] = {
+            price: cachedQuotes[symbol].price,
+            change: cachedQuotes[symbol].change,
+            changePercent: cachedQuotes[symbol].changePercent
+          };
+          console.log(`✓ Cache hit for ${symbol}`);
+        } else {
+          uncachedSymbols.push(symbol);
+        }
+      });
+
+      console.log(`📊 Cache: ${Object.keys(cachedQuotes).length} hits, ${uncachedSymbols.length} misses`);
+
+      // Step 2: Fetch uncached symbols from API with rate limiting
+      if (uncachedSymbols.length > 0 && ALPHA_VANTAGE_API_KEY) {
+        console.log(`🌐 Fetching ${uncachedSymbols.length} symbols from API with rate limiting...`);
+
+        const quotesToCache = [];
+
+        // Process in batches with rate limiting
+        for (let i = 0; i < uncachedSymbols.length; i++) {
+          const symbol = uncachedSymbols[i];
+
+          // Add delay between requests (except for the first one)
+          if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+          }
+
+          try {
+            const response = await fetch(
+              `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+            );
+
+            if (!response.ok) {
+              console.error(`HTTP error for ${symbol}: ${response.status}`);
+              continue;
+            }
+
+            const data = await response.json();
+
+            if (data['Error Message']) {
+              console.error(`API error for ${symbol}:`, data['Error Message']);
+              continue;
+            }
+
+            if (data['Note']) {
+              console.warn('⚠️ Rate limit warning:', data['Note']);
+              // If we hit rate limit, stop making more requests
+              break;
+            }
+
+            // Check for Alpha Vantage information message (another form of rate limit)
+            if (data['Information'] && data['Information'].includes('API')) {
+              console.warn('⚠️ Rate limit warning (Information):', data['Information']);
+              // If we hit rate limit, stop making more requests
+              break;
+            }
+
+            const quote = data['Global Quote'];
+            if (quote && Object.keys(quote).length > 0) {
+              const price = parseFloat(quote['05. price']);
+
+              // Skip quotes with invalid prices
+              if (!Number.isFinite(price)) {
+                console.warn(`⚠️ Invalid price for ${symbol}, skipping`);
+                continue;
+              }
+
+              const change = parseFloat(quote['09. change']);
+              const changePercent = quote['10. change percent'];
+              const parsedChangePercent = changePercent ? parseFloat(changePercent.replace('%', '')) : 0;
+
+              results[symbol] = {
+                price: price,
+                change: Number.isFinite(change) ? change : 0,
+                changePercent: Number.isFinite(parsedChangePercent) ? parsedChangePercent : 0
+              };
+
+              // Collect for batch cache update
+              quotesToCache.push({
+                ticker: symbol,
+                price: price,
+                change: change,
+                changePercent: parsedChangePercent,
+                volume: parseInt(quote['06. volume']) || null,
+                previousClose: parseFloat(quote['08. previous close']) || null,
+                open: parseFloat(quote['02. open']) || null,
+                high: parseFloat(quote['03. high']) || null,
+                low: parseFloat(quote['04. low']) || null,
+                lastTradingDay: quote['07. latest trading day'] || null
+              });
+
+              console.log(`✓ Fetched ${symbol}: $${price.toFixed(2)}`);
+            }
+          } catch (error) {
+            console.error(`Error fetching ${symbol}:`, error);
+          }
+        }
+
+        // Cache all fetched quotes in one batch
+        if (quotesToCache.length > 0) {
+          await stockQuoteCacheServices.cacheQuotes(quotesToCache);
+          console.log(`💾 Cached ${quotesToCache.length} quotes`);
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error in getBatchStockPrices:', error);
+      return results; // Return whatever we have
     }
   },
 
