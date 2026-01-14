@@ -44,14 +44,16 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
 
           if (priceData && priceData.price !== undefined && priceData.price !== null && Number.isFinite(priceData.price)) {
             priceMap[position.ticker] = priceData.price;
+            // Preserve null values - don't convert to 0
             changeMap[position.ticker] = {
-              change: Number.isFinite(priceData.change) ? priceData.change : 0,
-              changePercent: Number.isFinite(priceData.changePercent) ? priceData.changePercent : 0
+              change: priceData.change,
+              changePercent: priceData.changePercent
             };
           } else {
             // Fallback to average price if no data available
+            console.warn(`⚠️ No price data for ${position.ticker}, using average price as fallback`);
             priceMap[position.ticker] = position.average_price;
-            changeMap[position.ticker] = { change: 0, changePercent: 0 };
+            changeMap[position.ticker] = { change: null, changePercent: null };
           }
         });
 
@@ -65,7 +67,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
         const changeMap = {};
         positions.forEach((position) => {
           priceMap[position.ticker] = position.average_price;
-          changeMap[position.ticker] = { change: 0, changePercent: 0 };
+          changeMap[position.ticker] = { change: null, changePercent: null };
         });
         setCurrentPrices(priceMap);
         setPriceChanges(changeMap);
@@ -522,7 +524,6 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                   const totalValue = calculateTotalValue();
                   const accountPercentage = totalValue > 0 ? (positionValue || 0) / totalValue * 100 : 0;
                   const priceChange = priceChanges[position.ticker];
-                  const todayGainLossPercent = priceChange?.changePercent || 0;
 
                   return (
                     <tr key={position.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -533,7 +534,7 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                         )}
                       </td>
                       <td className="py-3 px-2 text-right">
-                        {priceChange?.change ? (
+                        {priceChange?.change != null && priceChange.change !== 0 ? (
                           <span className={priceChange.change >= 0 ? 'text-green-600' : 'text-red-600'}>
                             {priceChange.change >= 0 ? '+' : ''}{formatCurrency(priceChange.change)}
                           </span>
@@ -542,9 +543,9 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
                         )}
                       </td>
                       <td className="py-3 px-2 text-right">
-                        {todayGainLossPercent ? (
-                          <span className={todayGainLossPercent >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            {todayGainLossPercent >= 0 ? '+' : ''}{todayGainLossPercent.toFixed(2)}%
+                        {priceChange?.changePercent != null && priceChange.changePercent !== 0 ? (
+                          <span className={priceChange.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {priceChange.changePercent >= 0 ? '+' : ''}{priceChange.changePercent.toFixed(2)}%
                           </span>
                         ) : (
                           <span className="text-gray-500">--</span>
