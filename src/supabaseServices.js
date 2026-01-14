@@ -1724,8 +1724,8 @@ export const stockQuoteCacheServices = {
           return {
             ticker: data.ticker,
             price: parseFloat(data.price),
-            change: data.change ? parseFloat(data.change) : 0,
-            changePercent: data.change_percent ? parseFloat(data.change_percent) : 0,
+            change: data.change !== null && data.change !== undefined ? parseFloat(data.change) : null,
+            changePercent: data.change_percent !== null && data.change_percent !== undefined ? parseFloat(data.change_percent) : null,
             volume: data.volume,
             previousClose: data.previous_close ? parseFloat(data.previous_close) : null,
             open: data.open_price ? parseFloat(data.open_price) : null,
@@ -1777,8 +1777,8 @@ export const stockQuoteCacheServices = {
           result[row.ticker] = {
             ticker: row.ticker,
             price: parseFloat(row.price),
-            change: row.change ? parseFloat(row.change) : 0,
-            changePercent: row.change_percent ? parseFloat(row.change_percent) : 0,
+            change: row.change !== null && row.change !== undefined ? parseFloat(row.change) : null,
+            changePercent: row.change_percent !== null && row.change_percent !== undefined ? parseFloat(row.change_percent) : null,
             volume: row.volume,
             previousClose: row.previous_close ? parseFloat(row.previous_close) : null,
             open: row.open_price ? parseFloat(row.open_price) : null,

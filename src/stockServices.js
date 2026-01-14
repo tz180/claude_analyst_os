@@ -558,20 +558,20 @@ export const stockServices = {
 
               const change = parseFloat(quote['09. change']);
               const changePercent = quote['10. change percent'];
-              const parsedChangePercent = changePercent ? parseFloat(changePercent.replace('%', '')) : 0;
+              const parsedChangePercent = changePercent ? parseFloat(changePercent.replace('%', '')) : null;
 
               results[symbol] = {
                 price: price,
-                change: Number.isFinite(change) ? change : 0,
-                changePercent: Number.isFinite(parsedChangePercent) ? parsedChangePercent : 0
+                change: Number.isFinite(change) ? change : null,
+                changePercent: Number.isFinite(parsedChangePercent) ? parsedChangePercent : null
               };
 
               // Collect for batch cache update
               quotesToCache.push({
                 ticker: symbol,
                 price: price,
-                change: change,
-                changePercent: parsedChangePercent,
+                change: Number.isFinite(change) ? change : null,
+                changePercent: Number.isFinite(parsedChangePercent) ? parsedChangePercent : null,
                 volume: parseInt(quote['06. volume']) || null,
                 previousClose: parseFloat(quote['08. previous close']) || null,
                 open: parseFloat(quote['02. open']) || null,
@@ -580,7 +580,9 @@ export const stockServices = {
                 lastTradingDay: quote['07. latest trading day'] || null
               });
 
-              console.log(`✓ Fetched ${symbol}: $${price.toFixed(2)}`);
+              console.log(`✓ Fetched ${symbol}: $${price.toFixed(2)}, change: ${change}, changePercent: ${parsedChangePercent}`);
+            } else {
+              console.warn(`⚠️ Empty quote response for ${symbol}:`, JSON.stringify(data));
             }
           } catch (error) {
             console.error(`Error fetching ${symbol}:`, error);
