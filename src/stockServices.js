@@ -4,8 +4,8 @@ import { stockQuoteCacheServices } from './supabaseServices';
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
-// Rate limiting configuration
-const RATE_LIMIT_DELAY = 250; // 250ms between requests (4 requests/second to be safe)
+// Rate limiting configuration - max 5 requests per second
+const RATE_LIMIT_DELAY = 200; // 200ms between requests (5 requests/second max)
 
 // Helper to normalize numeric values coming from Alpha Vantage
 const parseNullableNumber = (value) => {
@@ -466,6 +466,109 @@ export const stockServices = {
       console.error('Error getting stock price:', error);
       return null;
     }
+  },
+
+  // Update stale cache quotes with rate-limited API calls
+  // This should be called BEFORE reading from cache for portfolio calculations
+  // Spreads requests at 200ms intervals (max 5 per second)
+  async updateStaleCacheQuotes(staleTickers) {
+    if (!staleTickers || staleTickers.length === 0) {
+      return { success: true, updated: 0 };
+    }
+
+    if (!ALPHA_VANTAGE_API_KEY) {
+      console.warn('Alpha Vantage API key not configured, cannot update cache');
+      return { success: false, error: 'API key not configured', updated: 0 };
+    }
+
+    console.log(`🔄 Updating cache for ${staleTickers.length} stale tickers...`);
+    const quotesToCache = [];
+    let rateLimitHit = false;
+
+    for (let i = 0; i < staleTickers.length; i++) {
+      const symbol = staleTickers[i].toUpperCase();
+
+      // Add delay between requests (except for the first one)
+      // This spreads requests at 200ms intervals for max 5/second
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      }
+
+      try {
+        const response = await fetch(
+          `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+        );
+
+        if (!response.ok) {
+          console.error(`HTTP error for ${symbol}: ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json();
+
+        if (data['Error Message']) {
+          console.error(`API error for ${symbol}:`, data['Error Message']);
+          continue;
+        }
+
+        if (data['Note']) {
+          console.warn('⚠️ Rate limit warning:', data['Note']);
+          rateLimitHit = true;
+          break;
+        }
+
+        if (data['Information'] && data['Information'].includes('API')) {
+          console.warn('⚠️ Rate limit warning (Information):', data['Information']);
+          rateLimitHit = true;
+          break;
+        }
+
+        const quote = data['Global Quote'];
+        if (quote && Object.keys(quote).length > 0) {
+          const price = parseFloat(quote['05. price']);
+
+          if (!Number.isFinite(price)) {
+            console.warn(`⚠️ Invalid price for ${symbol}, skipping`);
+            continue;
+          }
+
+          const change = parseFloat(quote['09. change']);
+          const changePercent = quote['10. change percent'];
+          const parsedChangePercent = changePercent ? parseFloat(changePercent.replace('%', '')) : null;
+
+          quotesToCache.push({
+            ticker: symbol,
+            price: price,
+            change: Number.isFinite(change) ? change : null,
+            changePercent: Number.isFinite(parsedChangePercent) ? parsedChangePercent : null,
+            volume: parseInt(quote['06. volume']) || null,
+            previousClose: parseFloat(quote['08. previous close']) || null,
+            open: parseFloat(quote['02. open']) || null,
+            high: parseFloat(quote['03. high']) || null,
+            low: parseFloat(quote['04. low']) || null,
+            lastTradingDay: quote['07. latest trading day'] || null
+          });
+
+          console.log(`✓ Updated ${symbol}: $${price.toFixed(2)}`);
+        } else {
+          console.warn(`⚠️ Empty quote response for ${symbol}`);
+        }
+      } catch (error) {
+        console.error(`Error fetching ${symbol}:`, error);
+      }
+    }
+
+    // Batch cache all fetched quotes
+    if (quotesToCache.length > 0) {
+      await stockQuoteCacheServices.cacheQuotes(quotesToCache);
+      console.log(`💾 Cached ${quotesToCache.length} updated quotes`);
+    }
+
+    return {
+      success: !rateLimitHit,
+      updated: quotesToCache.length,
+      rateLimitHit
+    };
   },
 
   // Batch fetch stock prices with rate limiting and caching
