@@ -31,30 +31,36 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
       const tickers = [...new Set(positions.map(p => p.ticker))];
 
       // Calculate date range we need (last 5 years should be enough)
-      const endDate = new Date().toISOString().split('T')[0];
+      const today = new Date();
+      const endDate = today.toISOString().split('T')[0];
       const startDate = new Date();
       startDate.setFullYear(startDate.getFullYear() - 5);
       const startDateStr = startDate.toISOString().split('T')[0];
 
+      // Calculate yesterday's date (we need data up to yesterday since today's market may not be closed)
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
       // Fetch historical prices for each ticker
       for (const ticker of tickers) {
         try {
-          // First, try to get from database
           let prices = [];
-          const dbResult = await historicalPriceServices.getHistoricalPrices(ticker, startDateStr, endDate);
-          
-          if (dbResult.success && dbResult.data && dbResult.data.length > 0) {
-            // We have data in the database, use it
-            prices = dbResult.data;
-            console.log(`Loaded ${prices.length} historical prices for ${ticker} from database`);
-          } else {
-            // No data in database, fetch from API
-            console.log(`No database cache for ${ticker}, fetching from API...`);
+
+          // First, check what date range we have in the database
+          const dateRangeResult = await historicalPriceServices.getDateRange(ticker);
+          const latestDateInDb = dateRangeResult.success ? dateRangeResult.latestDate : null;
+
+          console.log(`📊 ${ticker}: Latest date in DB: ${latestDateInDb || 'none'}, Yesterday: ${yesterdayStr}`);
+
+          if (!latestDateInDb) {
+            // No data in database at all, fetch full historical data from API
+            console.log(`No database cache for ${ticker}, fetching full history from API...`);
             const apiResult = await stockServices.getHistoricalPrices(ticker, 'full');
-            
+
             if (apiResult.success && apiResult.data) {
               prices = apiResult.data;
-              
+
               // Store in database for future use
               const storeResult = await historicalPriceServices.storeHistoricalPrices(ticker, prices);
               if (storeResult.success) {
@@ -64,6 +70,53 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
               }
             } else {
               console.warn(`Failed to fetch historical prices for ${ticker} from API:`, apiResult.error);
+            }
+          } else if (latestDateInDb < yesterdayStr) {
+            // We have data but it's outdated - fetch only the missing dates
+            console.log(`${ticker}: DB data ends at ${latestDateInDb}, need to fetch up to ${yesterdayStr}`);
+
+            // First, get existing data from database
+            const dbResult = await historicalPriceServices.getHistoricalPrices(ticker, startDateStr, endDate);
+            if (dbResult.success && dbResult.data) {
+              prices = dbResult.data;
+              console.log(`Loaded ${prices.length} existing prices for ${ticker} from database`);
+            }
+
+            // Fetch recent data from API (compact = last 100 trading days, ~4-5 months)
+            // This is sufficient for filling in gaps and more efficient than full history
+            const apiResult = await stockServices.getHistoricalPrices(ticker, 'compact');
+
+            if (apiResult.success && apiResult.data) {
+              // Filter to only get dates after our latest DB date
+              const newPrices = apiResult.data.filter(p => p.date > latestDateInDb);
+
+              if (newPrices.length > 0) {
+                console.log(`Fetched ${newPrices.length} new prices for ${ticker} from API (${newPrices[0].date} to ${newPrices[newPrices.length - 1].date})`);
+
+                // Store only the new prices in database
+                const storeResult = await historicalPriceServices.storeHistoricalPrices(ticker, newPrices);
+                if (storeResult.success) {
+                  console.log(`Stored ${newPrices.length} new prices for ${ticker} in database`);
+                } else {
+                  console.warn(`Failed to store new prices for ${ticker}:`, storeResult.error);
+                }
+
+                // Combine existing and new prices
+                prices = [...prices, ...newPrices];
+              } else {
+                console.log(`No new prices needed for ${ticker} (API data doesn't extend beyond ${latestDateInDb})`);
+              }
+            } else {
+              console.warn(`Failed to fetch recent prices for ${ticker} from API:`, apiResult.error);
+            }
+          } else {
+            // Database data is up to date, just use it
+            console.log(`${ticker}: DB data is current (${latestDateInDb}), using cached data`);
+            const dbResult = await historicalPriceServices.getHistoricalPrices(ticker, startDateStr, endDate);
+
+            if (dbResult.success && dbResult.data && dbResult.data.length > 0) {
+              prices = dbResult.data;
+              console.log(`Loaded ${prices.length} historical prices for ${ticker} from database`);
             }
           }
 
