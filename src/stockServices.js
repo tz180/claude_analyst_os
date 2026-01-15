@@ -872,12 +872,18 @@ export const stockServices = {
       }
       
       if (data['Note']) {
-        return { success: false, error: 'API rate limit exceeded. Please try again later.' };
+        return { success: false, error: 'API rate limit exceeded. Please try again later.', rateLimited: true };
       }
-      
+
+      // Check for Alpha Vantage "Information" message (another form of rate limit)
+      if (data['Information'] && data['Information'].includes('API')) {
+        console.warn('⚠️ Historical prices rate limit (Information):', data['Information']);
+        return { success: false, error: 'API rate limit exceeded. Please try again later.', rateLimited: true };
+      }
+
       const timeSeries = data['Time Series (Daily)'];
       if (!timeSeries) {
-        return { success: false, error: 'No historical data found' };
+        return { success: false, error: 'No historical data found for this symbol' };
       }
       
       // Convert to array of { date, price } sorted by date
