@@ -42,6 +42,10 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
 
+      // Small delay to let current quote fetching (in Portfolio.js) complete first
+      // This helps avoid hitting API rate limits from simultaneous requests
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Fetch historical prices for each ticker
       for (const ticker of tickers) {
         try {
@@ -69,7 +73,12 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
                 console.warn(`Failed to store historical prices for ${ticker}:`, storeResult.error);
               }
             } else {
-              console.warn(`Failed to fetch historical prices for ${ticker} from API:`, apiResult.error);
+              // No data in DB and API failed - nothing we can do
+              if (apiResult.rateLimited) {
+                console.warn(`⏳ ${ticker}: No data in DB and rate limited - will retry on next load`);
+              } else {
+                console.warn(`⚠️ ${ticker}: No data in DB and API failed: ${apiResult.error}`);
+              }
             }
           } else if (latestDateInDb < yesterdayStr) {
             // We have data but it's outdated - fetch only the missing dates
@@ -107,7 +116,12 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
                 console.log(`No new prices needed for ${ticker} (API data doesn't extend beyond ${latestDateInDb})`);
               }
             } else {
-              console.warn(`Failed to fetch recent prices for ${ticker} from API:`, apiResult.error);
+              // API failed but we still have existing data - use it as fallback
+              if (apiResult.rateLimited) {
+                console.warn(`⏳ ${ticker}: Rate limited, using existing ${prices.length} prices from database (up to ${latestDateInDb})`);
+              } else {
+                console.warn(`⚠️ ${ticker}: API error (${apiResult.error}), using existing ${prices.length} prices from database (up to ${latestDateInDb})`);
+              }
             }
           } else {
             // Database data is up to date, just use it
