@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Plus, BarChart3, RefreshCw } from 'lucide-react';
-import { portfolioServices, historicalPortfolioValueServices } from '../supabaseServices';
+import { portfolioServices, historicalPortfolioValueServices, stockQuoteCacheServices } from '../supabaseServices';
 import { stockServices } from '../stockServices';
 import PortfolioAnalytics from './PortfolioAnalytics';
 import PortfolioValueChart from './PortfolioValueChart';
@@ -21,7 +21,10 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
   const [calculatingHistorical, setCalculatingHistorical] = useState(false);
   const [historicalCalculationStatus, setHistoricalCalculationStatus] = useState(null);
 
-  // Load current prices for all positions using batch fetching with caching
+  // Load current prices for all positions using two-phase approach:
+  // 1. Check which tickers need cache updates (based on updated_at)
+  // 2. Update stale tickers with rate-limited API calls
+  // 3. Read from cache for portfolio calculations
   useEffect(() => {
     const loadPrices = async () => {
       if (positions.length === 0) return;
@@ -32,15 +35,26 @@ const Portfolio = ({ portfolio, positions, transactions, onRefresh }) => {
         const tickers = positions.map(p => p.ticker);
         console.log(`🔄 Loading prices for ${tickers.length} positions...`);
 
-        // Use batch fetching with caching (much more efficient)
-        const batchPrices = await stockServices.getBatchStockPrices(tickers);
+        // Phase 1: Check which tickers need cache updates (based on updated_at)
+        const { fresh, stale } = await stockQuoteCacheServices.getTickersNeedingUpdate(tickers);
+        console.log(`📊 Cache status: ${fresh.length} fresh, ${stale.length} need update`);
+
+        // Phase 2: Update stale tickers with rate-limited API calls (spread at 200ms for max 5/sec)
+        if (stale.length > 0) {
+          console.log(`🔄 Updating ${stale.length} stale tickers...`);
+          const updateResult = await stockServices.updateStaleCacheQuotes(stale);
+          console.log(`✓ Updated ${updateResult.updated} quotes${updateResult.rateLimitHit ? ' (rate limit hit)' : ''}`);
+        }
+
+        // Phase 3: Read from cache for portfolio calculations
+        const cachedQuotes = await stockQuoteCacheServices.getCachedQuotes(tickers);
 
         const priceMap = {};
         const changeMap = {};
 
         positions.forEach((position) => {
           const ticker = position.ticker.toUpperCase();
-          const priceData = batchPrices[ticker];
+          const priceData = cachedQuotes[ticker];
 
           if (priceData && priceData.price !== undefined && priceData.price !== null && Number.isFinite(priceData.price)) {
             priceMap[position.ticker] = priceData.price;

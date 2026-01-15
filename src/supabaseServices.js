@@ -1798,6 +1798,60 @@ export const stockQuoteCacheServices = {
     }
   },
 
+  // Get tickers that need cache updates based on updated_at column
+  // Returns object with fresh tickers (can use cache) and stale tickers (need API update)
+  async getTickersNeedingUpdate(tickers) {
+    try {
+      if (!tickers || tickers.length === 0) {
+        return { fresh: [], stale: [] };
+      }
+
+      const upperTickers = tickers.map(t => t.toUpperCase());
+
+      const { data, error } = await supabase
+        .from('stock_quotes_cache')
+        .select('ticker, updated_at')
+        .in('ticker', upperTickers);
+
+      if (error) {
+        console.error('Error checking ticker staleness:', error);
+        // If we can't check, assume all need updating
+        return { fresh: [], stale: upperTickers };
+      }
+
+      const ttl = this.getCacheTTL();
+      const now = new Date();
+      const fresh = [];
+      const stale = [];
+      const cachedTickers = new Set();
+
+      (data || []).forEach(row => {
+        cachedTickers.add(row.ticker);
+        const updatedAt = new Date(row.updated_at);
+        const ageMinutes = (now - updatedAt) / (1000 * 60);
+
+        if (ageMinutes <= ttl) {
+          fresh.push(row.ticker);
+        } else {
+          stale.push(row.ticker);
+        }
+      });
+
+      // Any tickers not in cache at all are also stale (need to be fetched)
+      upperTickers.forEach(ticker => {
+        if (!cachedTickers.has(ticker)) {
+          stale.push(ticker);
+        }
+      });
+
+      console.log(`📊 Cache check: ${fresh.length} fresh, ${stale.length} stale`);
+      return { fresh, stale };
+    } catch (error) {
+      console.error('Error in getTickersNeedingUpdate:', error);
+      return { fresh: [], stale: tickers.map(t => t.toUpperCase()) };
+    }
+  },
+
   // Helper to convert value to null only if truly missing (not zero)
   _toNullable(value) {
     if (value === undefined || value === null || (typeof value === 'number' && !Number.isFinite(value))) {
