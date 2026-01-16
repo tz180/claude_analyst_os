@@ -1641,7 +1641,7 @@ export const historicalPriceServices = {
       const earliestDate = data[0].date;
 
       // Get latest date
-      const { data: latestData, error: latestError } = await supabase
+      const { data: latestData } = await supabase
         .from('historical_stock_prices')
         .select('date')
         .eq('ticker', ticker.toUpperCase())
@@ -2175,7 +2175,7 @@ export const historicalPortfolioValueServices = {
       
       // First, verify the table exists by trying a simple query
       console.log('Testing table access for historical_portfolio_values...');
-      const { data: testData, error: testError } = await supabase
+      const { error: testError } = await supabase
         .from('historical_portfolio_values')
         .select('id')
         .limit(1);

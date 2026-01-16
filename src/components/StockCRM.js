@@ -192,12 +192,6 @@ const StockCRM = ({ ticker, onBack }) => {
     return value.toString().toUpperCase();
   };
 
-  const summarizeNoteContent = (content, maxLength = 140) => {
-    if (!content) return '—';
-    if (content.length <= maxLength) return content;
-    return `${content.slice(0, maxLength - 1)}…`;
-  };
-
   const getNotePerformance = (note) => {
     if (!note || !stockData?.price || !note.price_when_written) {
       return null;
@@ -270,6 +264,7 @@ const StockCRM = ({ ticker, onBack }) => {
     }
 
     return sorted;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notes, noteSort, stockData]);
 
   const earningsTimeline = useMemo(() => {

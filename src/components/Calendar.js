@@ -46,7 +46,8 @@ const Calendar = ({ checkoutHistory, goalsHistory, onDayClick }) => {
     return days;
   };
 
-  // Get activity level for a specific date
+  // Get activity level for a specific date (keeping for future use)
+  // eslint-disable-next-line no-unused-vars
   const getActivityLevel = (date) => {
     const normalizedDate = normalizeDate(date);
     if (!normalizedDate) return 0;

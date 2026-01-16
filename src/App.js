@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Target, CheckCircle, Plus, Award, LogOut, User, BarChart3, Trash2, ArrowRight, Compass, Layers, Sparkles, MessageSquare, RefreshCcw } from 'lucide-react';
 import './App.css';
-import { supabase } from './supabase';
 import { 
   dailyCheckinServices, 
   coverageServices, 
@@ -330,6 +329,7 @@ const AnalystOS = () => {
       setNotesLoading(false);
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadAnalyticsData = async () => {
@@ -669,7 +669,8 @@ const AnalystOS = () => {
     setShowAddCompanyModal(false);
   };
 
-  // Get checkout history from localStorage
+  // Get checkout history from localStorage (keeping for future use)
+  // eslint-disable-next-line no-unused-vars
   const getCheckoutHistory = () => {
     return checkoutHistory;
   };
@@ -688,7 +689,8 @@ const AnalystOS = () => {
     return todayEntry ? todayEntry.goals : '';
   };
 
-  // Get daily goals history from state
+  // Get daily goals history from state (keeping for future use)
+  // eslint-disable-next-line no-unused-vars
   const getGoalsHistory = () => {
     return goalsHistory;
   };
@@ -712,7 +714,8 @@ const AnalystOS = () => {
     }
   };
 
-  // Mark daily goals as completed
+  // Mark daily goals as completed (keeping for future use)
+  // eslint-disable-next-line no-unused-vars
   const markGoalsCompleted = async (date) => {
     const result = await dailyCheckinServices.markGoalsCompleted(date);
     if (result.success) {
