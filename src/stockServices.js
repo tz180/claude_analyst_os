@@ -4,8 +4,9 @@ import { stockQuoteCacheServices } from './supabaseServices';
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
-// Rate limiting configuration - max 5 requests per second
-const RATE_LIMIT_DELAY = 200; // 200ms between requests (5 requests/second max)
+// Rate limiting configuration - spread out to avoid burst detection
+// Alpha Vantage free tier is ~5 calls/minute; use 1200ms to be safe
+const RATE_LIMIT_DELAY = 1200; // 1.2 seconds between requests
 
 // Helper to normalize numeric values coming from Alpha Vantage
 const parseNullableNumber = (value) => {
@@ -401,7 +402,7 @@ export const stockServices = {
       if (!skipCache) {
         const cachedQuote = await stockQuoteCacheServices.getCachedQuote(upperSymbol);
         if (cachedQuote) {
-          console.log(`📦 Cache hit for ${upperSymbol} (age: ${Math.round((new Date() - new Date(cachedQuote.fetchedAt)) / 1000 / 60)} min)`);
+          console.log(`📦 Cache hit for ${upperSymbol} (age: ${Math.round((new Date() - new Date(cachedQuote.updatedAt)) / 1000 / 60)} min)`);
           return {
             price: cachedQuote.price,
             change: cachedQuote.change,
