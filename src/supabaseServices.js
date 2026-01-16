@@ -1641,7 +1641,7 @@ export const historicalPriceServices = {
       const earliestDate = data[0].date;
 
       // Get latest date
-      const { data: latestData, error: latestError } = await supabase
+      const { data: latestData } = await supabase
         .from('historical_stock_prices')
         .select('date')
         .eq('ticker', ticker.toUpperCase())
@@ -1712,11 +1712,11 @@ export const stockQuoteCacheServices = {
         return null;
       }
 
-      // Check if cache is still fresh
-      if (data && data.fetched_at) {
-        const fetchedAt = new Date(data.fetched_at);
+      // Check if cache is still fresh based on updated_at
+      if (data && data.updated_at) {
+        const updatedAt = new Date(data.updated_at);
         const now = new Date();
-        const ageMinutes = (now - fetchedAt) / (1000 * 60);
+        const ageMinutes = (now - updatedAt) / (1000 * 60);
         const ttl = this.getCacheTTL();
 
         if (ageMinutes <= ttl) {
@@ -1732,7 +1732,7 @@ export const stockQuoteCacheServices = {
             high: data.high_price ? parseFloat(data.high_price) : null,
             low: data.low_price ? parseFloat(data.low_price) : null,
             lastTradingDay: data.last_trading_day,
-            fetchedAt: data.fetched_at,
+            updatedAt: data.updated_at,
             fromCache: true
           };
         }
@@ -1770,8 +1770,9 @@ export const stockQuoteCacheServices = {
       const result = {};
 
       (data || []).forEach(row => {
-        const fetchedAt = new Date(row.fetched_at);
-        const ageMinutes = (now - fetchedAt) / (1000 * 60);
+        // Check staleness based on updated_at
+        const updatedAt = new Date(row.updated_at);
+        const ageMinutes = (now - updatedAt) / (1000 * 60);
 
         if (ageMinutes <= ttl) {
           result[row.ticker] = {
@@ -1785,7 +1786,7 @@ export const stockQuoteCacheServices = {
             high: row.high_price ? parseFloat(row.high_price) : null,
             low: row.low_price ? parseFloat(row.low_price) : null,
             lastTradingDay: row.last_trading_day,
-            fetchedAt: row.fetched_at,
+            updatedAt: row.updated_at,
             fromCache: true
           };
         }
@@ -2174,7 +2175,7 @@ export const historicalPortfolioValueServices = {
       
       // First, verify the table exists by trying a simple query
       console.log('Testing table access for historical_portfolio_values...');
-      const { data: testData, error: testError } = await supabase
+      const { error: testError } = await supabase
         .from('historical_portfolio_values')
         .select('id')
         .limit(1);

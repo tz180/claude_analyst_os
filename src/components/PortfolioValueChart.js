@@ -206,6 +206,9 @@ const PortfolioValueChart = ({ portfolio, positions, transactions, currentPrices
             fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
             startDate = fiveYearsAgo.toISOString().split('T')[0];
             break;
+          default:
+            // Default to all time (no start date filter)
+            break;
         }
 
         const result = await historicalPortfolioValueServices.getHistoricalValues(

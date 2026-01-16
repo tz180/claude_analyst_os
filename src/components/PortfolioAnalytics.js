@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { BarChart3, Clock, Target, PieChart, Globe, Building2, Factory } from 'lucide-react';
+import { BarChart3, Clock, Globe, Building2, Factory } from 'lucide-react';
 import { stockServices } from '../stockServices';
 
 const PortfolioAnalytics = ({ positions, transactions, portfolio }) => {
