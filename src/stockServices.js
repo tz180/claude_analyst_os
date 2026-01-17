@@ -5,8 +5,102 @@ const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
 // Rate limiting configuration - spread out to avoid burst detection
-// Alpha Vantage free tier is ~5 calls/minute; use 1200ms to be safe
-const RATE_LIMIT_DELAY = 1200; // 1.2 seconds between requests
+// Alpha Vantage free tier is ~5 calls/minute; use 12000ms (12s) to be safe
+// This ensures we stay well under the 5 calls/minute limit
+const BASE_RATE_LIMIT_DELAY = 12000; // 12 seconds between requests (5/minute = 12s spacing)
+
+// =============================================================================
+// GLOBAL API REQUEST QUEUE
+// =============================================================================
+// This queue serializes ALL Alpha Vantage API calls to prevent rate limiting.
+// Without this, concurrent calls from different parts of the app (Portfolio load,
+// buy modal price fetch, etc.) can burst the API and trigger rate limits.
+// =============================================================================
+
+class ApiRequestQueue {
+  constructor() {
+    this.queue = [];
+    this.isProcessing = false;
+    this.lastRequestTime = 0;
+    this.currentDelay = BASE_RATE_LIMIT_DELAY;
+    this.consecutiveSuccesses = 0;
+  }
+
+  // Add a request to the queue and return a promise that resolves with the response
+  async enqueue(url, options = {}) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ url, options, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  async processQueue() {
+    if (this.isProcessing || this.queue.length === 0) {
+      return;
+    }
+
+    this.isProcessing = true;
+
+    while (this.queue.length > 0) {
+      const { url, options, resolve, reject } = this.queue.shift();
+
+      // Calculate time to wait before next request
+      const timeSinceLastRequest = Date.now() - this.lastRequestTime;
+      const waitTime = Math.max(0, this.currentDelay - timeSinceLastRequest);
+
+      if (waitTime > 0) {
+        console.log(`⏳ API queue: waiting ${Math.round(waitTime / 1000)}s before next request...`);
+        await new Promise(r => setTimeout(r, waitTime));
+      }
+
+      try {
+        console.log(`🌐 API queue: fetching ${new URL(url).searchParams.get('function')} for ${new URL(url).searchParams.get('symbol') || 'N/A'}`);
+        this.lastRequestTime = Date.now();
+        const response = await fetch(url, options);
+
+        // Check for rate limiting in response (we'll handle this in the caller,
+        // but also track it here for adaptive delay)
+        const clonedResponse = response.clone();
+        try {
+          const data = await clonedResponse.json();
+          if (data['Note'] || (data['Information'] && data['Information'].includes('API'))) {
+            // Rate limit hit - increase delay significantly
+            this.currentDelay = Math.min(this.currentDelay * 2, 60000); // Max 60s
+            this.consecutiveSuccesses = 0;
+            console.warn(`⚠️ API queue: rate limit detected, increasing delay to ${this.currentDelay / 1000}s`);
+          } else if (!data['Error Message']) {
+            // Successful request - slowly decrease delay if we've had many successes
+            this.consecutiveSuccesses++;
+            if (this.consecutiveSuccesses >= 5 && this.currentDelay > BASE_RATE_LIMIT_DELAY) {
+              this.currentDelay = Math.max(this.currentDelay * 0.9, BASE_RATE_LIMIT_DELAY);
+              console.log(`✓ API queue: ${this.consecutiveSuccesses} successes, reducing delay to ${Math.round(this.currentDelay / 1000)}s`);
+            }
+          }
+        } catch {
+          // Response wasn't JSON, that's fine
+        }
+
+        resolve(response);
+      } catch (error) {
+        console.error('API queue fetch error:', error);
+        reject(error);
+      }
+    }
+
+    this.isProcessing = false;
+  }
+
+  // Get current queue length (useful for debugging)
+  get length() {
+    return this.queue.length;
+  }
+}
+
+// Singleton instance - all API calls go through this queue
+const apiQueue = new ApiRequestQueue();
+
+// Wrapper for fetch that goes through the queue
+const queuedFetch = (url, options) => apiQueue.enqueue(url, options);
 
 // Helper to normalize numeric values coming from Alpha Vantage
 const parseNullableNumber = (value) => {
@@ -130,7 +224,7 @@ const buildQuoteFromSeries = (symbol, latestDate, latestValues, previousValues) 
 
 const fetchDailyQuoteFallback = async (symbol) => {
   console.log('Falling back to TIME_SERIES_DAILY for', symbol);
-  const response = await fetch(
+  const response = await queuedFetch(
     `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${ALPHA_VANTAGE_API_KEY}`
   );
 
@@ -201,7 +295,7 @@ export const stockServices = {
 
     try {
       console.log('Testing API key with simple endpoint...');
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=SYMBOL_SEARCH&keywords=IBM&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
       
@@ -231,7 +325,7 @@ export const stockServices = {
 
     try {
       console.log('Checking Alpha Vantage API status...');
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=1min&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
       
@@ -290,7 +384,7 @@ export const stockServices = {
       console.log(`🌐 Fetching stock quote for ${upperSymbol} from API...`);
 
       // Try GLOBAL_QUOTE first (more reliable for free tier)
-      const quoteResponse = await fetch(
+      const quoteResponse = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${upperSymbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
 
@@ -413,7 +507,7 @@ export const stockServices = {
 
       console.log(`🌐 Fetching stock price from API for ${upperSymbol}...`);
 
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${upperSymbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
 
@@ -471,7 +565,7 @@ export const stockServices = {
 
   // Update stale cache quotes with rate-limited API calls
   // This should be called BEFORE reading from cache for portfolio calculations
-  // Spreads requests at 200ms intervals (max 5 per second)
+  // All API calls go through the global queue which handles rate limiting
   async updateStaleCacheQuotes(staleTickers) {
     if (!staleTickers || staleTickers.length === 0) {
       return { success: true, updated: 0 };
@@ -482,21 +576,17 @@ export const stockServices = {
       return { success: false, error: 'API key not configured', updated: 0 };
     }
 
-    console.log(`🔄 Updating cache for ${staleTickers.length} stale tickers...`);
+    console.log(`🔄 Updating cache for ${staleTickers.length} stale tickers (queued)...`);
     const quotesToCache = [];
     let rateLimitHit = false;
 
     for (let i = 0; i < staleTickers.length; i++) {
       const symbol = staleTickers[i].toUpperCase();
 
-      // Add delay between requests (except for the first one)
-      // This spreads requests at 200ms intervals for max 5/second
-      if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      }
+      // Rate limiting is handled by the global API queue - no manual delay needed
 
       try {
-        const response = await fetch(
+        const response = await queuedFetch(
           `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
         );
 
@@ -605,23 +695,20 @@ export const stockServices = {
 
       console.log(`📊 Cache: ${Object.keys(cachedQuotes).length} hits, ${uncachedSymbols.length} misses`);
 
-      // Step 2: Fetch uncached symbols from API with rate limiting
+      // Step 2: Fetch uncached symbols from API (rate limiting handled by global queue)
       if (uncachedSymbols.length > 0 && ALPHA_VANTAGE_API_KEY) {
-        console.log(`🌐 Fetching ${uncachedSymbols.length} symbols from API with rate limiting...`);
+        console.log(`🌐 Fetching ${uncachedSymbols.length} symbols from API (queued)...`);
 
         const quotesToCache = [];
 
-        // Process in batches with rate limiting
+        // Process symbols - rate limiting is handled by the global API queue
         for (let i = 0; i < uncachedSymbols.length; i++) {
           const symbol = uncachedSymbols[i];
 
-          // Add delay between requests (except for the first one)
-          if (i > 0) {
-            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-          }
+          // Rate limiting is handled by the global API queue - no manual delay needed
 
           try {
-            const response = await fetch(
+            const response = await queuedFetch(
               `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
             );
 
@@ -714,28 +801,28 @@ export const stockServices = {
     }
 
     try {
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=OVERVIEW&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data['Error Message']) {
         return { success: false, error: data['Error Message'] };
       }
-      
+
       if (data['Note']) {
         return { success: false, error: 'API rate limit exceeded. Please try again later.' };
       }
-      
+
       if (!data.Symbol) {
         return { success: false, error: 'No company data found for this symbol' };
       }
-      
+
       const marketCap = parseNullableNumber(data.MarketCapitalization);
       const totalDebt = parseNullableNumber(data.TotalDebt);
       const cashAndEquivalents = parseNullableNumber(data.CashAndCashEquivalents);
@@ -789,24 +876,24 @@ export const stockServices = {
     }
 
     try {
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=INCOME_STATEMENT&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data['Error Message']) {
         return { success: false, error: data['Error Message'] };
       }
-      
+
       if (data['Note']) {
         return { success: false, error: 'API rate limit exceeded. Please try again later.' };
       }
-      
+
       return {
         success: true,
         data: {
@@ -827,24 +914,24 @@ export const stockServices = {
     }
 
     try {
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=BALANCE_SHEET&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data['Error Message']) {
         return { success: false, error: data['Error Message'] };
       }
-      
+
       if (data['Note']) {
         return { success: false, error: 'API rate limit exceeded. Please try again later.' };
       }
-      
+
       return {
         success: true,
         data: {
@@ -865,24 +952,24 @@ export const stockServices = {
     }
 
     try {
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=CASH_FLOW&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data['Error Message']) {
         return { success: false, error: data['Error Message'] };
       }
-      
+
       if (data['Note']) {
         return { success: false, error: 'API rate limit exceeded. Please try again later.' };
       }
-      
+
       return {
         success: true,
         data: {
@@ -903,14 +990,14 @@ export const stockServices = {
     }
 
     try {
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=EARNINGS_CALENDAR&symbol=${symbol}&horizon=3month&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const rawText = await response.text();
       let parsedBody;
       try {
@@ -961,20 +1048,20 @@ export const stockServices = {
     }
 
     try {
-      const response = await fetch(
+      const response = await queuedFetch(
         `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=${outputsize}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data['Error Message']) {
         return { success: false, error: data['Error Message'] };
       }
-      
+
       if (data['Note']) {
         return { success: false, error: 'API rate limit exceeded. Please try again later.', rateLimited: true };
       }
