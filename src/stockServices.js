@@ -5,9 +5,9 @@ const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
 // Rate limiting configuration - spread out to avoid burst detection
-// Alpha Vantage free tier is ~5 calls/minute; use 12000ms (12s) to be safe
-// This ensures we stay well under the 5 calls/minute limit
-const BASE_RATE_LIMIT_DELAY = 12000; // 12 seconds between requests (5/minute = 12s spacing)
+// Alpha Vantage free tier is ~5 calls/minute; use 3000ms (3s) as baseline
+// Queue will auto-increase delay if rate limits are hit
+const BASE_RATE_LIMIT_DELAY = 3000; // 3 seconds between requests
 
 // =============================================================================
 // GLOBAL API REQUEST QUEUE
