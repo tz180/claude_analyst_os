@@ -4,10 +4,10 @@ import { stockQuoteCacheServices } from './supabaseServices';
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
 
-// Rate limiting configuration - spread out to avoid burst detection
-// Alpha Vantage free tier is ~5 calls/minute; use 12000ms (12s) to be safe
-// This ensures we stay well under the 5 calls/minute limit
-const BASE_RATE_LIMIT_DELAY = 12000; // 12 seconds between requests (5/minute = 12s spacing)
+// Rate limiting configuration
+// Start with 4 requests/second (250ms between requests)
+// Queue will auto-increase delay if rate limits are hit
+const BASE_RATE_LIMIT_DELAY = 250; // 250ms = 4 requests per second
 
 // =============================================================================
 // GLOBAL API REQUEST QUEUE
@@ -24,14 +24,33 @@ class ApiRequestQueue {
     this.lastRequestTime = 0;
     this.currentDelay = BASE_RATE_LIMIT_DELAY;
     this.consecutiveSuccesses = 0;
+    // Track in-flight requests by URL to deduplicate concurrent calls
+    this.pendingRequests = new Map();
   }
 
   // Add a request to the queue and return a promise that resolves with the response
+  // Deduplicates concurrent requests for the same URL
   async enqueue(url, options = {}) {
-    return new Promise((resolve, reject) => {
+    // Check if there's already a pending request for this URL
+    if (this.pendingRequests.has(url)) {
+      console.log(`🔄 API queue: reusing pending request for ${new URL(url).searchParams.get('symbol') || 'N/A'}`);
+      return this.pendingRequests.get(url);
+    }
+
+    const requestPromise = new Promise((resolve, reject) => {
       this.queue.push({ url, options, resolve, reject });
       this.processQueue();
     });
+
+    // Track this request so concurrent calls can reuse it
+    this.pendingRequests.set(url, requestPromise);
+
+    // Clean up after request completes
+    requestPromise.finally(() => {
+      this.pendingRequests.delete(url);
+    });
+
+    return requestPromise;
   }
 
   async processQueue() {
@@ -49,7 +68,8 @@ class ApiRequestQueue {
       const waitTime = Math.max(0, this.currentDelay - timeSinceLastRequest);
 
       if (waitTime > 0) {
-        console.log(`⏳ API queue: waiting ${Math.round(waitTime / 1000)}s before next request...`);
+        const waitDisplay = waitTime >= 1000 ? `${(waitTime / 1000).toFixed(1)}s` : `${waitTime}ms`;
+        console.log(`⏳ API queue: waiting ${waitDisplay} before next request...`);
         await new Promise(r => setTimeout(r, waitTime));
       }
 
@@ -73,7 +93,8 @@ class ApiRequestQueue {
             this.consecutiveSuccesses++;
             if (this.consecutiveSuccesses >= 5 && this.currentDelay > BASE_RATE_LIMIT_DELAY) {
               this.currentDelay = Math.max(this.currentDelay * 0.9, BASE_RATE_LIMIT_DELAY);
-              console.log(`✓ API queue: ${this.consecutiveSuccesses} successes, reducing delay to ${Math.round(this.currentDelay / 1000)}s`);
+              const delayDisplay = this.currentDelay >= 1000 ? `${(this.currentDelay / 1000).toFixed(1)}s` : `${Math.round(this.currentDelay)}ms`;
+              console.log(`✓ API queue: ${this.consecutiveSuccesses} successes, reducing delay to ${delayDisplay}`);
             }
           }
         } catch {
